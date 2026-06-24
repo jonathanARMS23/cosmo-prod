@@ -51,14 +51,24 @@ services:
       - -c
     command:
       - |
+        LOG=/home/frappe/frappe-bench/sites/create-site.log
+        echo "=== START ===" > $$LOG
+        echo "site=$$FRAPPE_SITE_NAME" >> $$LOG
+        echo "bench=$$(which bench 2>&1)" >> $$LOG
+        echo "apps=$$(ls /home/frappe/frappe-bench/apps/ 2>&1)" >> $$LOG
+        echo "common_config=$$(cat /home/frappe/frappe-bench/sites/common_site_config.json 2>&1)" >> $$LOG
         if [ ! -f /home/frappe/frappe-bench/sites/$$FRAPPE_SITE_NAME/site_config.json ]; then
+          echo "--- bench new-site ---" >> $$LOG
           bench new-site $$FRAPPE_SITE_NAME \
-            --db-root-password $$DB_ROOT_PASSWORD \
-            --admin-password $$FRAPPE_ADMIN_PASSWORD \
+            --db-root-password "$$DB_ROOT_PASSWORD" \
+            --admin-password "$$FRAPPE_ADMIN_PASSWORD" \
             --install-app erpnext \
-            --install-app cosmo_erp;
+            --install-app cosmo_erp >> $$LOG 2>&1
+          STATUS=$$?
+          echo "exit=$$STATUS" >> $$LOG
+          exit $$STATUS
         else
-          echo "Site $$FRAPPE_SITE_NAME already exists, skipping.";
+          echo "Site exists, skipping." >> $$LOG
         fi
 
   backend:
