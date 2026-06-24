@@ -1,0 +1,6 @@
+[submodule "cosmo_erp"]
+	path = cosmo_erp
+	url = https://github.com/jonathanARMS23/cosmo_erp
+[submodule "cosmo-mcp"]
+	path = cosmo-mcp
+	url = https://github.com/jonathanARMS23/cosmo-mcp

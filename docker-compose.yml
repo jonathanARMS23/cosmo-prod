@@ -1,0 +1,161 @@
+services:
+  backend:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+      - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - REDIS_CACHE=redis-cache:6379
+      - REDIS_QUEUE=redis-queue:6379
+      - SOCKETIO_PORT=9000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+    networks: [cosmo-net]
+
+  frontend:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    command: nginx-entrypoint.sh
+    environment:
+      - BACKEND=backend:8000
+      - SOCKETIO=websocket:9000
+      - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
+      - FRAPPE_SITE_NAME_HEADER=${FRAPPE_SITE_NAME:-cosmo.localhost}
+      - PROXY_READ_TIMEOUT=120
+      - CLIENT_MAX_BODY_SIZE=50m
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    ports:
+      - "8080:8080"
+    depends_on: [backend]
+    networks: [cosmo-net]
+
+  websocket:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    command: node /home/frappe/frappe-bench/apps/frappe/socketio.js
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    depends_on: [backend]
+    networks: [cosmo-net]
+
+  scheduler:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    command: bench schedule
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    depends_on: [backend]
+    networks: [cosmo-net]
+
+  worker-short:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    command: bench worker --queue short,default
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    depends_on: [backend]
+    networks: [cosmo-net]
+
+  worker-long:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    command: bench worker --queue long
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    depends_on: [backend]
+    networks: [cosmo-net]
+
+  db:
+    image: mariadb:10.6
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","mysqladmin","ping","-h","localhost","--password=${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - db-data:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME:-_cosmo}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    networks: [cosmo-net]
+
+  redis-cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes: [redis-cache-data:/data]
+    networks: [cosmo-net]
+
+  redis-queue:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes: [redis-queue-data:/data]
+    networks: [cosmo-net]
+
+  cosmo-mcp:
+    build:
+      context: ./cosmo-mcp
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - ERPNEXT_URL=http://frontend:8080
+      - ERPNEXT_API_KEY=${COSMO_MCP_API_KEY}
+      - ERPNEXT_API_SECRET=${COSMO_MCP_API_SECRET}
+      - MCP_TRANSPORT=http
+      - MCP_HTTP_PORT=3100
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes: [cosmo-mcp-logs:/var/log/cosmo-mcp]
+    ports: ["3100:3100"]
+    depends_on: [frontend]
+    networks: [cosmo-net]
+
+  hermes:
+    build:
+      context: ./cosmo_erp/hermes
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_MANAGER_ID=${TELEGRAM_MANAGER_ID}
+      - TELEGRAM_CASHIER_ID=${TELEGRAM_CASHIER_ID}
+      - COSMO_MCP_URL=http://cosmo-mcp:3100
+      - HERMES_SOUL=/config/SOUL.md
+      - HERMES_CONFIG=/config/config.yaml
+    volumes:
+      - ./cosmo_erp/hermes:/config:ro
+      - hermes-logs:/var/log/hermes
+    depends_on: [cosmo-mcp]
+    networks: [cosmo-net]
+
+volumes:
+  sites:
+  logs:
+  db-data:
+  redis-cache-data:
+  redis-queue-data:
+  cosmo-mcp-logs:
+  hermes-logs:
+
+networks:
+  cosmo-net:
+    driver: bridge
