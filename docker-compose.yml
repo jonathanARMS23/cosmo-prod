@@ -4,14 +4,12 @@ services:
     restart: "no"
     volumes:
       - sites:/home/frappe/frappe-bench/sites
-      - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
     environment:
       - DB_HOST=db
       - DB_PORT=3306
       - REDIS_CACHE=redis-cache:6379
       - REDIS_QUEUE=redis-queue:6379
       - SOCKETIO_PORT=9000
-      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on:
       db:
         condition: service_healthy
@@ -68,9 +66,15 @@ services:
             --install-app cosmo_erp >> $$LOG 2>&1
           STATUS=$$?
           echo "exit=$$STATUS" >> $$LOG
+          if [ $$STATUS -eq 0 ]; then
+            grep -qF "cosmo_erp" sites/apps.txt || echo "cosmo_erp" >> sites/apps.txt
+            echo "apps.txt=$(cat sites/apps.txt)" >> $$LOG
+          fi
           exit $$STATUS
         else
           echo "Site exists, skipping." >> $$LOG
+          grep -qF "cosmo_erp" sites/apps.txt || echo "cosmo_erp" >> sites/apps.txt
+          echo "apps.txt=$(cat sites/apps.txt)" >> $$LOG
         fi
 
   backend:
