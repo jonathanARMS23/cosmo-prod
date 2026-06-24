@@ -1,6 +1,8 @@
 services:
   configurator:
-    image: frappe/erpnext:v15
+    build:
+      context: .
+      dockerfile: Dockerfile.frappe
     restart: "no"
     volumes:
       - sites:/home/frappe/frappe-bench/sites
@@ -32,7 +34,9 @@ services:
         bench set-config -gp socketio_port $$SOCKETIO_PORT;
 
   create-site:
-    image: frappe/erpnext:v15
+    build:
+      context: .
+      dockerfile: Dockerfile.frappe
     restart: "no"
     volumes:
       - sites:/home/frappe/frappe-bench/sites
@@ -54,7 +58,6 @@ services:
         LOG=/home/frappe/frappe-bench/sites/create-site.log
         echo "=== START ===" > $$LOG
         echo "site=$$FRAPPE_SITE_NAME" >> $$LOG
-        echo "bench=$$(which bench 2>&1)" >> $$LOG
         echo "apps=$$(ls /home/frappe/frappe-bench/apps/ 2>&1)" >> $$LOG
         echo "common_config=$$(cat /home/frappe/frappe-bench/sites/common_site_config.json 2>&1)" >> $$LOG
         if [ ! -f /home/frappe/frappe-bench/sites/$$FRAPPE_SITE_NAME/site_config.json ]; then
@@ -72,7 +75,9 @@ services:
         fi
 
   backend:
-    image: frappe/erpnext:v15
+    build:
+      context: .
+      dockerfile: Dockerfile.frappe
     restart: unless-stopped
     volumes:
       - sites:/home/frappe/frappe-bench/sites
@@ -114,7 +119,9 @@ services:
     networks: [cosmo-net]
 
   websocket:
-    image: frappe/erpnext:v15
+    build:
+      context: .
+      dockerfile: Dockerfile.frappe
     restart: unless-stopped
     command: node /home/frappe/frappe-bench/apps/frappe/socketio.js
     volumes:
@@ -124,7 +131,9 @@ services:
     networks: [cosmo-net]
 
   scheduler:
-    image: frappe/erpnext:v15
+    build:
+      context: .
+      dockerfile: Dockerfile.frappe
     restart: unless-stopped
     command: bench schedule
     volumes:
@@ -134,7 +143,9 @@ services:
     networks: [cosmo-net]
 
   worker-short:
-    image: frappe/erpnext:v15
+    build:
+      context: .
+      dockerfile: Dockerfile.frappe
     restart: unless-stopped
     command: bench worker --queue short,default
     volumes:
@@ -144,7 +155,9 @@ services:
     networks: [cosmo-net]
 
   worker-long:
-    image: frappe/erpnext:v15
+    build:
+      context: .
+      dockerfile: Dockerfile.frappe
     restart: unless-stopped
     command: bench worker --queue long
     volumes:
