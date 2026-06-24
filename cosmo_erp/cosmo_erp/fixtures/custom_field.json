@@ -1,6 +1,7 @@
 [
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_section_info",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_section_info",
@@ -16,6 +17,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_category",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_category",
@@ -31,6 +33,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_brand",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_brand",
@@ -46,6 +49,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_skin_type",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_skin_type",
@@ -61,6 +65,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_ingredients",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_ingredients",
@@ -76,6 +81,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_section_stock",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_section_stock",
@@ -91,6 +97,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_expiry_date",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_expiry_date",
@@ -106,6 +113,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_batch_mandatory",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_batch_mandatory",
@@ -121,6 +129,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_reorder_level",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_reorder_level",
@@ -136,6 +145,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_preferred_supplier",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_preferred_supplier",
@@ -151,6 +161,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_supplier_ref",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_supplier_ref",
@@ -166,6 +177,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_section_ai",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_section_ai",
@@ -181,6 +193,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_product_image_hash",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_product_image_hash",
@@ -196,6 +209,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_ai_description",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_ai_description",
@@ -211,6 +225,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Item-cosmo_ai_last_scan",
     "dt": "Item",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_ai_last_scan",
@@ -226,6 +241,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "Sales Invoice-cosmo_payment_mode",
     "dt": "Sales Invoice",
     "module": "Cosmo ERP",
     "fieldname": "cosmo_payment_mode",

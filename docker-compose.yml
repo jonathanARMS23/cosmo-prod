@@ -23,7 +23,7 @@ services:
       - -c
     command:
       - |
-        printf "frappe\nerpnext" > sites/apps.txt;
+        printf "frappe\nerpnext\n" > sites/apps.txt;
         bench set-config -g db_host $$DB_HOST;
         bench set-config -gp db_port $$DB_PORT;
         bench set-config -g redis_cache "redis://$$REDIS_CACHE";
@@ -56,6 +56,7 @@ services:
         echo "pip install cosmo_erp..." >> $$LOG
         /home/frappe/frappe-bench/env/bin/pip install -q --no-deps -e /home/frappe/frappe-bench/apps/cosmo_erp >> $$LOG 2>&1
         echo "pip exit=$$?" >> $$LOG
+        grep -qF "cosmo_erp" sites/apps.txt || echo "cosmo_erp" >> sites/apps.txt
         echo "site=$$FRAPPE_SITE_NAME" >> $$LOG
         if [ ! -f /home/frappe/frappe-bench/sites/$$FRAPPE_SITE_NAME/site_config.json ]; then
           echo "--- bench new-site ---" >> $$LOG

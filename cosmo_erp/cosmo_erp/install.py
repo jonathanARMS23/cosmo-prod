@@ -1,11 +1,14 @@
 import frappe
-from cosmo_erp.cosmo_erp.setup.dashboard_setup import create_dashboard
+from cosmo_erp.setup.dashboard_setup import create_dashboard
 
 
 def after_install():
     """Appelé par bench après installation de cosmo_erp."""
     create_roles()
-    create_workspace()
+    try:
+        create_workspace()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Cosmo: Erreur création Workspace (non bloquant)")
     try:
         create_dashboard()
     except Exception:
@@ -14,7 +17,7 @@ def after_install():
 
     # Créer l'utilisateur Hermes Agent (non bloquant)
     try:
-        from cosmo_erp.cosmo_erp.setup.create_hermes_user import create_or_update_hermes_user, _print_result
+        from cosmo_erp.setup.create_hermes_user import create_or_update_hermes_user, _print_result
         result = create_or_update_hermes_user()
         _print_result(result)
     except Exception:
@@ -68,13 +71,6 @@ def create_workspace():
                 "label": "Caisse POS",
                 "link_type": "Page",
                 "link_to": "cosmo-pos",
-                "onboard": 1,
-            },
-            {
-                "type": "Link",
-                "label": "Agent Hermes",
-                "link_type": "Page",
-                "link_to": "cosmo-hermes",
                 "onboard": 1,
             },
             {
