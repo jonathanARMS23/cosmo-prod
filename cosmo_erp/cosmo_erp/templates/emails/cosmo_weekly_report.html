@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; }
+  .header { background: #e91e8c; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+  .header h1 { margin: 0; font-size: 1.4em; }
+  .header p { margin: 4px 0 0; opacity: .85; font-size: 0.9em; }
+  .section { padding: 20px; border-bottom: 1px solid #eee; }
+  .section h3 { color: #e91e8c; margin: 0 0 12px; font-size: 1em; text-transform: uppercase; letter-spacing: 1px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .kpi-card { background: #f9f9f9; border-left: 3px solid #e91e8c; padding: 12px; border-radius: 4px; }
+  .kpi-value { font-size: 1.4em; font-weight: bold; color: #e91e8c; }
+  .kpi-label { font-size: 0.8em; color: #888; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #f5f5f5; padding: 8px 10px; text-align: left; font-size: 0.85em; color: #666; }
+  tbody td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; font-size: 0.88em; }
+  tbody tr:hover { background: #fafafa; }
+  .footer { padding: 16px; text-align: center; font-size: 0.8em; color: #aaa; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.78em; }
+  .badge-pink { background: #fce4ec; color: #e91e8c; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Rapport Hebdomadaire Cosmo</h1>
+  <p>{{ start_date }} → {{ end_date }}</p>
+</div>
+
+<!-- KPIs -->
+<div class="section">
+  <h3>Chiffres de la semaine</h3>
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-value">{{ "{:,.0f}".format(data.revenue.total or 0) }} Ar</div>
+      <div class="kpi-label">Chiffre d'affaires</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value">{{ data.revenue.transactions or 0 }}</div>
+      <div class="kpi-label">Transactions</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value">
+        {% if data.revenue.transactions and data.revenue.transactions > 0 %}
+          {{ "{:,.0f}".format((data.revenue.total or 0) / data.revenue.transactions) }} Ar
+        {% else %}—{% endif %}
+      </div>
+      <div class="kpi-label">Panier moyen</div>
+    </div>
+  </div>
+</div>
+
+<!-- Top produits -->
+{% if data.top_items %}
+<div class="section">
+  <h3>Top 10 produits</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Produit</th>
+        <th style="text-align:right">CA</th>
+        <th style="text-align:right">Qté vendue</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in data.top_items %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ item.item_name }}</td>
+        <td style="text-align:right; font-weight:bold">{{ "{:,.0f}".format(item.total_revenue or 0) }} Ar</td>
+        <td style="text-align:right">{{ "{:,.0f}".format(item.total_qty or 0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Stock critique -->
+{% if data.low_stock_count and data.low_stock_count > 0 %}
+<div class="section">
+  <h3>Alertes stock</h3>
+  <p>
+    <span class="badge badge-pink">{{ data.low_stock_count }} produits</span>
+    en dessous du seuil de réapprovisionnement.
+    Consultez le Dashboard Cosmo pour les détails.
+  </p>
+</div>
+{% endif %}
+
+<div class="footer">
+  Cosmo ERP · Rapport généré automatiquement chaque lundi<br>
+  <a href="#" style="color: #e91e8c;">Accéder au Dashboard Cosmo</a>
+</div>
+
+</body>
+</html>

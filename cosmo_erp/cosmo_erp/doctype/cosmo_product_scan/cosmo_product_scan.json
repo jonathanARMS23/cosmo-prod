@@ -1,0 +1,135 @@
+{
+ "actions": [],
+ "autoname": "COSMO-SCAN-.YYYY.-.###",
+ "creation": "2024-01-01 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "scan_datetime", "scan_status", "created_by_agent",
+  "col_break_1",
+  "matched_item", "confidence_score", "action_taken",
+  "section_image", "image_url",
+  "section_results", "ai_raw_response",
+  "section_extracted", "extracted_data"
+ ],
+ "fields": [
+  {
+   "fieldname": "scan_datetime",
+   "fieldtype": "Datetime",
+   "label": "Date/Heure du scan",
+   "read_only": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "scan_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Statut",
+   "options": "En cours\nIdentifié\nNon identifié\nErreur\nArchivé",
+   "default": "En cours",
+   "read_only": 1
+  },
+  {
+   "fieldname": "created_by_agent",
+   "fieldtype": "Check",
+   "label": "Déclenché par Agent Hermes",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "matched_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Produit identifié",
+   "options": "Item"
+  },
+  {
+   "fieldname": "confidence_score",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Score de confiance"
+  },
+  {
+   "fieldname": "action_taken",
+   "fieldtype": "Select",
+   "label": "Action effectuée",
+   "options": "Aucune\nItem créé\nItem mis à jour\nIgnoré",
+   "default": "Aucune"
+  },
+  {
+   "fieldname": "section_image",
+   "fieldtype": "Section Break",
+   "label": "Image analysée"
+  },
+  {
+   "fieldname": "image_url",
+   "fieldtype": "Attach Image",
+   "label": "Image",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_results",
+   "fieldtype": "Section Break",
+   "label": "Résultats IA"
+  },
+  {
+   "fieldname": "ai_raw_response",
+   "fieldtype": "Long Text",
+   "label": "Réponse brute IA",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_extracted",
+   "fieldtype": "Section Break",
+   "label": "Données extraites"
+  },
+  {
+   "fieldname": "extracted_data",
+   "fieldtype": "JSON",
+   "label": "Données structurées",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2024-01-01 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Cosmo ERP",
+ "name": "Cosmo Product Scan",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 0,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "read": 1,
+   "role": "Cosmo Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "read": 1,
+   "role": "Cosmo Caissière",
+   "write": 0
+  }
+ ],
+ "sort_field": "scan_datetime",
+ "sort_order": "DESC",
+ "states": [
+  {"color": "Blue", "title": "En cours"},
+  {"color": "Green", "title": "Identifié"},
+  {"color": "Orange", "title": "Non identifié"},
+  {"color": "Red", "title": "Erreur"}
+ ],
+ "title_field": "scan_status",
+ "track_changes": 0
+}

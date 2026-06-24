@@ -1,0 +1,2 @@
+include MANIFEST.in
+recursive-include cosmo_erp *.html *.js *.css *.json *.txt *.md *.png *.jpg

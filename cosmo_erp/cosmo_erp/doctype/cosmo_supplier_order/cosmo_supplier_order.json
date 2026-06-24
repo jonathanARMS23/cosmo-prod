@@ -1,0 +1,189 @@
+{
+ "actions": [],
+ "autoname": "COSMO-SO-.YYYY.-.###",
+ "creation": "2024-01-01 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "supplier", "order_date", "expected_delivery", "status", "origin",
+  "col_break_1",
+  "cosmo_notes",
+  "section_items", "items",
+  "section_totals", "total_qty", "total_amount",
+  "linked_purchase_order"
+ ],
+ "fields": [
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Fournisseur",
+   "options": "Supplier",
+   "reqd": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "order_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date de commande",
+   "reqd": 1,
+   "default": "Today"
+  },
+  {
+   "fieldname": "expected_delivery",
+   "fieldtype": "Date",
+   "label": "Livraison prévue"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Statut",
+   "options": "Brouillon\nEnvoyé\nConfirmé\nReçu\nAnnulé",
+   "default": "Brouillon"
+  },
+  {
+   "fieldname": "origin",
+   "fieldtype": "Select",
+   "label": "Origine",
+   "options": "Manuel\nAgent Hermes\nRéapprovisionnement Auto",
+   "default": "Manuel"
+  },
+  {
+   "fieldname": "col_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cosmo_notes",
+   "fieldtype": "Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "section_items",
+   "fieldtype": "Section Break",
+   "label": "Produits commandés"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Articles",
+   "options": "Cosmo Supplier Order Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_totals",
+   "fieldtype": "Section Break",
+   "label": "Totaux"
+  },
+  {
+   "fieldname": "total_qty",
+   "fieldtype": "Float",
+   "label": "Quantité totale",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_amount",
+   "fieldtype": "Currency",
+   "label": "Montant total",
+   "read_only": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "linked_purchase_order",
+   "fieldtype": "Link",
+   "label": "Purchase Order lié",
+   "options": "Purchase Order",
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "is_submittable": 1,
+ "links": [
+  {
+   "group": "Documents liés",
+   "link_doctype": "Purchase Order",
+   "link_fieldname": "cosmo_source_order"
+  }
+ ],
+ "modified": "2024-01-01 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Cosmo ERP",
+ "name": "Cosmo Supplier Order",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase Manager",
+   "share": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 0,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 0,
+   "submit": 0,
+   "cancel": 0,
+   "amend": 0,
+   "write": 0
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cosmo Manager",
+   "share": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 0,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [
+  {"color": "Blue", "title": "Brouillon"},
+  {"color": "Orange", "title": "Envoyé"},
+  {"color": "Green", "title": "Confirmé"},
+  {"color": "Purple", "title": "Reçu"},
+  {"color": "Red", "title": "Annulé"}
+ ],
+ "title_field": "supplier",
+ "track_changes": 1
+}

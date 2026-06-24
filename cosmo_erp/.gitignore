@@ -1,0 +1,36 @@
+# Secrets
+.env.prod
+*.env.local
+.env
+
+# Frappe / ERPNext
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+dist/
+build/
+.tox/
+.coverage
+.cache
+*.log
+
+# Node.js (cosmo-mcp)
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log

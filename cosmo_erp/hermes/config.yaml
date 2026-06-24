@@ -1,0 +1,127 @@
+# Configuration Hermes Agent — COSMO ERP
+# Hermes est l'agent IA self-hosted NousResearch (MIT)
+# Documentation : https://github.com/NousResearch/hermes
+
+agent:
+  name: cosmo
+  soul: ./SOUL.md
+  language: fr
+  timezone: Indian/Antananarivo  # Madagascar UTC+3
+
+# Modèle LLM
+llm:
+  provider: nexos
+  api_key: ${NEXOS_API_KEY}
+  model: claude-opus-4-8  # Tier 3 via nexos.ai
+  fallback_model: claude-sonnet-4-6
+  max_tokens: 4096
+  temperature: 0.7
+  vision: true  # Activer pour traitement photos produits/factures
+
+# Interface Telegram
+telegram:
+  token: ${TELEGRAM_BOT_TOKEN}
+  # IDs des utilisateurs autorisés (obtenir via @userinfobot)
+  authorized_users:
+    - id: ${TELEGRAM_MANAGER_ID}
+      name: Jonathan
+      role: manager
+    - id: ${TELEGRAM_CASHIER_ID}
+      name: Caissière
+      role: cashier
+  # Timeout de confirmation (en secondes)
+  confirmation_timeout: 60
+
+# MCP Servers
+mcp_servers:
+  - name: cosmo-erp
+    description: "ERPNext cosmo_erp — Stock, ventes, clients, fournisseurs, rapports"
+    transport: http
+    url: http://95.216.187.73:3100
+
+# Skills (workflows réutilisables)
+skills_dir: ./skills/
+
+# Tâches planifiées
+crons:
+  - name: briefing_matin
+    schedule: "0 8 * * *"  # Tous les jours à 8h00
+    timezone: Indian/Antananarivo
+    targets:
+      - role: manager
+    prompt: |
+      Génère le briefing matinal complet pour la boutique.
+      Récupère le résumé dashboard, les alertes stock, les expirations proches (30 jours).
+      Formate de manière synthétique et positive.
+
+  - name: alerte_stock_critique
+    schedule: "0 10 * * *"  # Tous les jours à 10h00
+    timezone: Indian/Antananarivo
+    targets:
+      - role: manager
+    prompt: |
+      Vérifie uniquement les produits en stock critique.
+      Si des produits sont sous le seuil, liste-les avec leurs fournisseurs préférés
+      et propose de créer les commandes manquantes.
+      Si aucun produit critique → ne pas envoyer de message.
+
+  - name: rapport_hebdo
+    schedule: "0 9 * * 1"  # Chaque lundi à 9h00
+    timezone: Indian/Antananarivo
+    targets:
+      - role: manager
+    prompt: |
+      Génère le rapport hebdomadaire de la boutique.
+      Récupère les ventes des 7 derniers jours (date_from = lundi dernier, date_to = dimanche).
+      Inclus : CA total, top 5 produits, répartition par catégorie, comparaison avec la semaine précédente.
+      Format structuré et lisible pour un manager.
+
+# Comportement
+behavior:
+  # Réponses
+  max_response_length: 1000  # caractères max par message Telegram
+  split_long_responses: true  # Découper les longs messages en plusieurs
+
+  # Confirmation
+  require_confirmation_for:
+    - create_sale
+    - cancel_invoice
+    - adjust_stock
+    - receive_stock
+    - create_supplier_order
+    - create_item
+    - update_item_price
+
+  # Contrôle d'accès par rôle
+  role_permissions:
+    cashier:
+      allowed_tools:
+        - get_item_stock
+        - get_low_stock_items
+        - search_items
+        - create_sale
+        - get_daily_sales
+        - get_invoice
+        - find_or_create_customer
+        - identify_product_from_image
+      denied_tools:
+        - cancel_invoice
+        - adjust_stock
+        - receive_stock
+        - create_supplier_order
+        - create_item
+        - update_item_price
+        - get_dashboard
+        - get_revenue_trend
+        - get_category_performance
+        - get_top_customers
+        - get_inactive_customers
+    manager:
+      allowed_tools: "*"  # Accès total
+
+# Logging
+logging:
+  level: info
+  file: /var/log/hermes/cosmo.log
+  max_size: 50MB
+  max_files: 7

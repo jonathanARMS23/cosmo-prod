@@ -1,0 +1,5 @@
+Pillow>=9.0.0
+python-barcode>=0.15.1
+qrcode[pil]>=7.3.1
+fuzzywuzzy>=0.18.0
+python-Levenshtein>=0.12.2

@@ -1,0 +1,12 @@
+{
+ "doctype": "Page",
+ "module": "Cosmo ERP",
+ "name": "cosmo-pos",
+ "page_name": "cosmo-pos",
+ "roles": [
+  {"role": "Cosmo Caissière"},
+  {"role": "Cosmo Manager"},
+  {"role": "System Manager"}
+ ],
+ "title": "Cosmo POS"
+}

@@ -1,0 +1,28 @@
+/* Cosmo ERP — Global Styles */
+:root {
+    --cosmo-primary: #e91e8c;
+    --cosmo-primary-dark: #c2185b;
+    --cosmo-accent: #f48fb1;
+    --cosmo-bg-soft: #fce4ec;
+}
+
+.cosmo-badge-low {
+    background-color: var(--cosmo-primary);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+}
+
+.cosmo-product-card {
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: box-shadow 0.2s;
+}
+
+.cosmo-product-card:hover {
+    box-shadow: 0 4px 12px rgba(233, 30, 140, 0.15);
+    border-color: var(--cosmo-primary);
+}

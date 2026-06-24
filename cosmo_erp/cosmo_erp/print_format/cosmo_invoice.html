@@ -1,0 +1,153 @@
+{%- set boutique_name = "Cosmo Boutique" -%}
+{%- set boutique_address = "123 Avenue Principale, Antananarivo" -%}
+{%- set boutique_phone = "+261 34 00 000 00" -%}
+{%- set return_policy = "Echange possible sous 7 jours avec ticket de caisse." -%}
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  /* ── Reset & base ── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #222; width: 148mm; max-width: 148mm; }
+
+  /* ── Header boutique ── */
+  .header { text-align: center; border-bottom: 2px solid #e91e8c; padding-bottom: 8px; margin-bottom: 8px; }
+  .boutique-name { font-size: 16px; font-weight: bold; color: #e91e8c; letter-spacing: 1px; }
+  .boutique-info { font-size: 9px; color: #666; line-height: 1.5; }
+
+  /* ── Infos facture ── */
+  .invoice-meta { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 9px; }
+  .invoice-meta-left, .invoice-meta-right { line-height: 1.6; }
+  .invoice-number { font-weight: bold; font-size: 11px; color: #333; }
+
+  /* ── Client ── */
+  .customer-info { background: #f9f9f9; border-left: 3px solid #e91e8c; padding: 4px 8px; margin-bottom: 8px; font-size: 9px; line-height: 1.5; }
+
+  /* ── Table produits ── */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  thead th { background: #e91e8c; color: #fff; padding: 4px 6px; font-size: 9px; text-align: left; }
+  thead th:last-child, thead th:nth-child(2), thead th:nth-child(3) { text-align: right; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  tbody td { padding: 3px 6px; font-size: 9px; border-bottom: 1px solid #f0f0f0; }
+  tbody td:nth-child(2), tbody td:nth-child(3), tbody td:last-child { text-align: right; }
+
+  /* ── Totaux ── */
+  .totals { margin-left: auto; width: 60%; margin-bottom: 8px; }
+  .total-row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 9px; }
+  .total-separator { border-top: 1px solid #ddd; margin: 4px 0; }
+  .grand-total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; font-weight: bold; color: #e91e8c; border-top: 2px solid #e91e8c; }
+
+  /* ── Paiement ── */
+  .payment-mode { font-size: 9px; color: #555; margin-bottom: 8px; }
+
+  /* ── Footer ── */
+  .footer { text-align: center; border-top: 1px dashed #ccc; padding-top: 8px; margin-top: 8px; }
+  .footer-thanks { font-size: 12px; font-weight: bold; color: #e91e8c; margin-bottom: 4px; }
+  .footer-policy { font-size: 8px; color: #888; line-height: 1.4; }
+
+  @media print {
+    body { width: 148mm; }
+    @page { size: A5; margin: 10mm; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  {% if doc.company_address_display %}
+    <div class="boutique-logo"><!-- logo optionnel --></div>
+  {% endif %}
+  <div class="boutique-name">{{ boutique_name }}</div>
+  <div class="boutique-info">
+    {{ boutique_address }}<br>
+    Tel : {{ boutique_phone }}
+  </div>
+</div>
+
+<!-- INFOS FACTURE -->
+<div class="invoice-meta">
+  <div class="invoice-meta-left">
+    <div class="invoice-number">Facture N° {{ doc.name }}</div>
+    <div>Date : {{ frappe.utils.formatdate(doc.posting_date, "dd/MM/yyyy") }}</div>
+    <div>Heure : {{ doc.posting_time[:5] if doc.posting_time else "" }}</div>
+    {% if doc.cosmo_payment_mode %}
+    <div>Caissiere : {{ doc.owner }}</div>
+    {% endif %}
+  </div>
+  <div class="invoice-meta-right">
+    {% if doc.cosmo_payment_mode %}
+    <div>Mode : <strong>{{ doc.cosmo_payment_mode }}</strong></div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- CLIENT (si renseigne et different du walk-in) -->
+{% if doc.customer and doc.customer != "Walk-in Customer" %}
+<div class="customer-info">
+  <strong>Client :</strong> {{ doc.customer_name or doc.customer }}<br>
+  {% if doc.contact_mobile %}Tel : {{ doc.contact_mobile }}{% endif %}
+</div>
+{% endif %}
+
+<!-- TABLE PRODUITS -->
+<table>
+  <thead>
+    <tr>
+      <th>Designation</th>
+      <th>Qte</th>
+      <th>Prix unit.</th>
+      <th>Montant</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in doc.items %}
+    <tr>
+      <td>{{ item.item_name }}</td>
+      <td>{{ item.qty | int }}</td>
+      <td>{{ frappe.utils.fmt_money(item.rate, currency=doc.currency) }}</td>
+      <td>{{ frappe.utils.fmt_money(item.amount, currency=doc.currency) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- TOTAUX -->
+<div class="totals">
+  <div class="total-row">
+    <span>Sous-total</span>
+    <span>{{ frappe.utils.fmt_money(doc.net_total, currency=doc.currency) }}</span>
+  </div>
+  {% if doc.discount_amount and doc.discount_amount > 0 %}
+  <div class="total-row" style="color: #e53935;">
+    <span>Remise</span>
+    <span>- {{ frappe.utils.fmt_money(doc.discount_amount, currency=doc.currency) }}</span>
+  </div>
+  {% endif %}
+  {% if doc.total_taxes_and_charges and doc.total_taxes_and_charges > 0 %}
+  <div class="total-row">
+    <span>TVA</span>
+    <span>{{ frappe.utils.fmt_money(doc.total_taxes_and_charges, currency=doc.currency) }}</span>
+  </div>
+  {% endif %}
+  <div class="grand-total-row">
+    <span>TOTAL</span>
+    <span>{{ frappe.utils.fmt_money(doc.grand_total, currency=doc.currency) }}</span>
+  </div>
+</div>
+
+<!-- MODE PAIEMENT -->
+<div class="payment-mode">
+  Regle par : <strong>{{ doc.cosmo_payment_mode or "Especes" }}</strong>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div class="footer-thanks">Merci pour votre achat !</div>
+  <div class="footer-policy">{{ return_policy }}</div>
+</div>
+
+</body>
+</html>

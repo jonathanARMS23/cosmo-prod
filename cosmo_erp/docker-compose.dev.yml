@@ -1,0 +1,61 @@
+# docker-compose.dev.yml — Environnement de développement local
+# Usage : make dev-up
+
+services:
+  # ERPNext dev (single container simplifié)
+  erpnext-dev:
+    image: frappe/erpnext:v15
+    ports:
+      - "8000:8000"
+    volumes:
+      - sites-dev:/home/frappe/frappe-bench/sites
+      - .:/home/frappe/frappe-bench/apps/cosmo_erp
+    environment:
+      - DB_HOST=db-dev
+      - REDIS_CACHE=redis-dev:6379
+      - REDIS_QUEUE=redis-dev:6379
+    depends_on:
+      - db-dev
+      - redis-dev
+    networks:
+      - cosmo-dev-net
+
+  db-dev:
+    image: mariadb:10.6
+    environment:
+      - MYSQL_ROOT_PASSWORD=dev_root_password
+      - MYSQL_DATABASE=_cosmo_dev
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db-dev-data:/var/lib/mysql
+    networks:
+      - cosmo-dev-net
+
+  redis-dev:
+    image: redis:7-alpine
+    networks:
+      - cosmo-dev-net
+
+  cosmo-mcp-dev:
+    build:
+      context: ../cosmo-mcp
+      dockerfile: Dockerfile
+    environment:
+      - ERPNEXT_URL=http://erpnext-dev:8000
+      - ERPNEXT_API_KEY=${COSMO_MCP_API_KEY:-dev_key}
+      - ERPNEXT_API_SECRET=${COSMO_MCP_API_SECRET:-dev_secret}
+      - LOG_LEVEL=debug
+    depends_on:
+      - erpnext-dev
+    networks:
+      - cosmo-dev-net
+
+volumes:
+  sites-dev:
+  db-dev-data:
+
+networks:
+  cosmo-dev-net:
+    driver: bridge
