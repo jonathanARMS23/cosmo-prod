@@ -31,6 +31,7 @@ class ErpNextClient {
         Authorization: `token ${apiKey}:${apiSecret}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        Expect: '',  // désactive Expect: 100-continue rejeté par Nginx
       },
       timeout: 30000,
     });
