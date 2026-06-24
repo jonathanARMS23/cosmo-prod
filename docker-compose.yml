@@ -1,4 +1,36 @@
 services:
+  configurator:
+    image: frappe/erpnext:v15
+    restart: "no"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - REDIS_CACHE=redis-cache:6379
+      - REDIS_QUEUE=redis-queue:6379
+      - SOCKETIO_PORT=9000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+    networks: [cosmo-net]
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - |
+        ls -1 /home/frappe/frappe-bench/apps > sites/apps.txt;
+        bench set-config -g db_host $$DB_HOST;
+        bench set-config -gp db_port $$DB_PORT;
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+        bench set-config -gp socketio_port $$SOCKETIO_PORT;
+
   create-site:
     image: frappe/erpnext:v15
     restart: "no"
@@ -11,8 +43,8 @@ services:
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
       - FRAPPE_ADMIN_PASSWORD=${FRAPPE_ADMIN_PASSWORD}
     depends_on:
-      db:
-        condition: service_healthy
+      configurator:
+        condition: service_completed_successfully
     networks: [cosmo-net]
     entrypoint:
       - bash
@@ -21,7 +53,6 @@ services:
       - |
         if [ ! -f /home/frappe/frappe-bench/sites/$$FRAPPE_SITE_NAME/site_config.json ]; then
           bench new-site $$FRAPPE_SITE_NAME \
-            --db-host db \
             --db-root-password $$DB_ROOT_PASSWORD \
             --admin-password $$FRAPPE_ADMIN_PASSWORD \
             --install-app erpnext \
