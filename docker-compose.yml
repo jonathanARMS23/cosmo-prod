@@ -1,17 +1,17 @@
 services:
   configurator:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: "no"
     volumes:
       - sites:/home/frappe/frappe-bench/sites
+      - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
     environment:
       - DB_HOST=db
       - DB_PORT=3306
       - REDIS_CACHE=redis-cache:6379
       - REDIS_QUEUE=redis-queue:6379
       - SOCKETIO_PORT=9000
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on:
       db:
         condition: service_healthy
@@ -34,9 +34,7 @@ services:
         bench set-config -gp socketio_port $$SOCKETIO_PORT;
 
   create-site:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: "no"
     volumes:
       - sites:/home/frappe/frappe-bench/sites
@@ -46,6 +44,7 @@ services:
       - FRAPPE_SITE_NAME=${FRAPPE_SITE_NAME:-cosmo.localhost}
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
       - FRAPPE_ADMIN_PASSWORD=${FRAPPE_ADMIN_PASSWORD}
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on:
       configurator:
         condition: service_completed_successfully
@@ -75,9 +74,7 @@ services:
         fi
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
     volumes:
       - sites:/home/frappe/frappe-bench/sites
@@ -89,6 +86,7 @@ services:
       - REDIS_CACHE=redis-cache:6379
       - REDIS_QUEUE=redis-queue:6379
       - SOCKETIO_PORT=9000
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on:
       db:
         condition: service_healthy
@@ -119,50 +117,50 @@ services:
     networks: [cosmo-net]
 
   websocket:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
     command: node /home/frappe/frappe-bench/apps/frappe/socketio.js
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    environment:
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on: [backend]
     networks: [cosmo-net]
 
   scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
     command: bench schedule
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    environment:
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on: [backend]
     networks: [cosmo-net]
 
   worker-short:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
     command: bench worker --queue short,default
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    environment:
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on: [backend]
     networks: [cosmo-net]
 
   worker-long:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
     command: bench worker --queue long
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    environment:
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on: [backend]
     networks: [cosmo-net]
 
