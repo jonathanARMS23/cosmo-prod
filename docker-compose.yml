@@ -1,4 +1,33 @@
 services:
+  create-site:
+    image: frappe/erpnext:v15
+    restart: "no"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+      - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [cosmo-net]
+    entrypoint: >
+      bash -c "
+        if [ ! -f /home/frappe/frappe-bench/sites/${FRAPPE_SITE_NAME:-cosmo.localhost}/site_config.json ]; then
+          bench new-site ${FRAPPE_SITE_NAME:-cosmo.localhost}
+            --db-host db
+            --db-root-password ${DB_ROOT_PASSWORD}
+            --admin-password ${FRAPPE_ADMIN_PASSWORD}
+            --install-app erpnext
+            --install-app cosmo_erp
+            --no-mariadb-socket;
+        else
+          echo 'Site already exists, skipping creation.';
+        fi
+      "
+
   backend:
     image: frappe/erpnext:v15
     restart: unless-stopped
@@ -19,6 +48,8 @@ services:
         condition: service_started
       redis-queue:
         condition: service_started
+      create-site:
+        condition: service_completed_successfully
     networks: [cosmo-net]
 
   frontend:
