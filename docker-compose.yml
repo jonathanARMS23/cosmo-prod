@@ -1,8 +1,6 @@
 services:
   configurator:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: "no"
     volumes:
       - sites:/home/frappe/frappe-bench/sites
@@ -25,7 +23,7 @@ services:
       - -c
     command:
       - |
-        ls -1 /home/frappe/frappe-bench/apps > sites/apps.txt;
+        printf "frappe\nerpnext" > sites/apps.txt;
         bench set-config -g db_host $$DB_HOST;
         bench set-config -gp db_port $$DB_PORT;
         bench set-config -g redis_cache "redis://$$REDIS_CACHE";
@@ -34,9 +32,7 @@ services:
         bench set-config -gp socketio_port $$SOCKETIO_PORT;
 
   create-site:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: "no"
     volumes:
       - sites:/home/frappe/frappe-bench/sites
@@ -46,7 +42,6 @@ services:
       - FRAPPE_SITE_NAME=${FRAPPE_SITE_NAME:-cosmo.localhost}
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
       - FRAPPE_ADMIN_PASSWORD=${FRAPPE_ADMIN_PASSWORD}
-      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on:
       configurator:
         condition: service_completed_successfully
@@ -58,9 +53,10 @@ services:
       - |
         LOG=/home/frappe/frappe-bench/sites/create-site.log
         echo "=== START ===" > $$LOG
+        echo "pip install cosmo_erp..." >> $$LOG
+        /home/frappe/frappe-bench/env/bin/pip install -q --no-deps -e /home/frappe/frappe-bench/apps/cosmo_erp >> $$LOG 2>&1
+        echo "pip exit=$$?" >> $$LOG
         echo "site=$$FRAPPE_SITE_NAME" >> $$LOG
-        echo "apps=$$(ls /home/frappe/frappe-bench/apps/ 2>&1)" >> $$LOG
-        echo "common_config=$$(cat /home/frappe/frappe-bench/sites/common_site_config.json 2>&1)" >> $$LOG
         if [ ! -f /home/frappe/frappe-bench/sites/$$FRAPPE_SITE_NAME/site_config.json ]; then
           echo "--- bench new-site ---" >> $$LOG
           bench new-site $$FRAPPE_SITE_NAME \
@@ -72,19 +68,15 @@ services:
           echo "exit=$$STATUS" >> $$LOG
           if [ $$STATUS -eq 0 ]; then
             grep -qF "cosmo_erp" sites/apps.txt || echo "cosmo_erp" >> sites/apps.txt
-            echo "apps.txt=$(cat sites/apps.txt)" >> $$LOG
           fi
           exit $$STATUS
         else
           echo "Site exists, skipping." >> $$LOG
           grep -qF "cosmo_erp" sites/apps.txt || echo "cosmo_erp" >> sites/apps.txt
-          echo "apps.txt=$(cat sites/apps.txt)" >> $$LOG
         fi
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
     volumes:
       - sites:/home/frappe/frappe-bench/sites
@@ -96,7 +88,6 @@ services:
       - REDIS_CACHE=redis-cache:6379
       - REDIS_QUEUE=redis-queue:6379
       - SOCKETIO_PORT=9000
-      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on:
       db:
         condition: service_healthy
@@ -107,11 +98,22 @@ services:
       create-site:
         condition: service_completed_successfully
     networks: [cosmo-net]
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - |
+        /home/frappe/frappe-bench/env/bin/pip install -q --no-deps -e /home/frappe/frappe-bench/apps/cosmo_erp
+        exec /home/frappe/frappe-bench/env/bin/gunicorn \
+          --chdir=/home/frappe/frappe-bench/sites \
+          --bind=0.0.0.0:8000 \
+          frappe.app:application \
+          --workers=2 \
+          --timeout=120 \
+          --preload
 
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
     command: nginx-entrypoint.sh
     environment:
@@ -129,60 +131,62 @@ services:
     networks: [cosmo-net]
 
   websocket:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
     command: node /home/frappe/frappe-bench/apps/frappe/socketio.js
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
-    environment:
-      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on: [backend]
     networks: [cosmo-net]
 
   scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
-    command: bench schedule
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
-    environment:
-      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on: [backend]
     networks: [cosmo-net]
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - |
+        /home/frappe/frappe-bench/env/bin/pip install -q --no-deps -e /home/frappe/frappe-bench/apps/cosmo_erp
+        exec bench schedule
 
   worker-short:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
-    command: bench worker --queue short,default
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
-    environment:
-      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on: [backend]
     networks: [cosmo-net]
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - |
+        /home/frappe/frappe-bench/env/bin/pip install -q --no-deps -e /home/frappe/frappe-bench/apps/cosmo_erp
+        exec bench worker --queue short,default
 
   worker-long:
-    build:
-      context: .
-      dockerfile: Dockerfile.frappe
+    image: frappe/erpnext:v15
     restart: unless-stopped
-    command: bench worker --queue long
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
-    environment:
-      - PYTHONPATH=/home/frappe/frappe-bench/apps/cosmo_erp
     depends_on: [backend]
     networks: [cosmo-net]
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - |
+        /home/frappe/frappe-bench/env/bin/pip install -q --no-deps -e /home/frappe/frappe-bench/apps/cosmo_erp
+        exec bench worker --queue long
 
   db:
     image: mariadb:10.6
