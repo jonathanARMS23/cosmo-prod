@@ -7,26 +7,28 @@ services:
       - logs:/home/frappe/frappe-bench/logs
       - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
     environment:
-      - DB_HOST=db
-      - DB_PORT=3306
+      - FRAPPE_SITE_NAME=${FRAPPE_SITE_NAME:-cosmo.localhost}
+      - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - FRAPPE_ADMIN_PASSWORD=${FRAPPE_ADMIN_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
     networks: [cosmo-net]
-    entrypoint: >
-      bash -c "
-        if [ ! -f /home/frappe/frappe-bench/sites/${FRAPPE_SITE_NAME:-cosmo.localhost}/site_config.json ]; then
-          bench new-site ${FRAPPE_SITE_NAME:-cosmo.localhost}
-            --db-host db
-            --db-root-password ${DB_ROOT_PASSWORD}
-            --admin-password ${FRAPPE_ADMIN_PASSWORD}
-            --install-app erpnext
-            --install-app cosmo_erp
-            --no-mariadb-socket;
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - |
+        if [ ! -f /home/frappe/frappe-bench/sites/$$FRAPPE_SITE_NAME/site_config.json ]; then
+          bench new-site $$FRAPPE_SITE_NAME \
+            --db-host db \
+            --db-root-password $$DB_ROOT_PASSWORD \
+            --admin-password $$FRAPPE_ADMIN_PASSWORD \
+            --install-app erpnext \
+            --install-app cosmo_erp;
         else
-          echo 'Site already exists, skipping creation.';
+          echo "Site $$FRAPPE_SITE_NAME already exists, skipping.";
         fi
-      "
 
   backend:
     image: frappe/erpnext:v15
