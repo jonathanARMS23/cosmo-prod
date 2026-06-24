@@ -128,24 +128,8 @@ services:
     depends_on: [frontend]
     networks: [cosmo-net]
 
-  hermes:
-    build:
-      context: ./cosmo_erp/hermes
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_MANAGER_ID=${TELEGRAM_MANAGER_ID}
-      - TELEGRAM_CASHIER_ID=${TELEGRAM_CASHIER_ID}
-      - COSMO_MCP_URL=http://cosmo-mcp:3100
-      - HERMES_SOUL=/config/SOUL.md
-      - HERMES_CONFIG=/config/config.yaml
-    volumes:
-      - ./cosmo_erp/hermes:/config:ro
-      - hermes-logs:/var/log/hermes
-    depends_on: [cosmo-mcp]
-    networks: [cosmo-net]
+  # Hermes Agent tourne sur Hostinger (serveur externe)
+  # Il se connecte à cosmo-mcp via http://HETZNER_IP:3100
 
 volumes:
   sites:
@@ -154,7 +138,6 @@ volumes:
   redis-cache-data:
   redis-queue-data:
   cosmo-mcp-logs:
-  hermes-logs:
 
 networks:
   cosmo-net:
