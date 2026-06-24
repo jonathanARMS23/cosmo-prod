@@ -3,8 +3,8 @@ FROM frappe/erpnext:v15
 USER frappe
 WORKDIR /home/frappe/frappe-bench
 
-# Copy cosmo_erp and install as editable package in frappe virtualenv.
-# The volume mount at runtime replaces the copied files;
-# the egg-link persists and still resolves to the correct path.
+# Copy cosmo_erp and install as editable into frappe virtualenv.
+# Volume mount at runtime overrides these files with the real code;
+# the .pth file pip creates keeps pointing to the same path.
 COPY --chown=frappe:frappe cosmo_erp/ apps/cosmo_erp/
-RUN env/bin/pip install -q -e apps/cosmo_erp
+RUN env/bin/pip install -q --no-deps -e apps/cosmo_erp
