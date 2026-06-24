@@ -74,6 +74,8 @@ doc_events = {
 # Les Custom Fields et Property Setters définissent les champs cosmétiques ajoutés
 # aux DocTypes standard ERPNext (Item, Customer, etc.).
 fixtures = [
+    # Devise MGA (Ariary malgache) — non inclus dans ERPNext par défaut
+    {"dt": "Currency", "filters": [["name", "=", "MGA"]]},
     # Champs personnalisés ajoutés aux DocTypes ERPNext standard
     "Custom Field",
     # Surcharges de propriétés de champs existants (reqd, hidden, etc.)

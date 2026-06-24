@@ -1,0 +1,13 @@
+[
+  {
+    "doctype": "Currency",
+    "name": "MGA",
+    "currency_name": "MGA",
+    "enabled": 1,
+    "symbol": "Ar",
+    "fraction": "Iraimbilanja",
+    "fraction_units": 5,
+    "number_format": "# ###,##",
+    "smallest_currency_fraction_value": 1.0
+  }
+]
