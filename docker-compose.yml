@@ -129,7 +129,7 @@ services:
     networks: [cosmo-net]
 
   # Hermes Agent tourne sur Hostinger (serveur externe)
-  # Il se connecte à cosmo-mcp via http://HETZNER_IP:3100
+  # Il se connecte à cosmo-mcp via http://95.216.187.73:3100
 
 volumes:
   sites:
