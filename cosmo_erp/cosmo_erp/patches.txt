@@ -9,3 +9,4 @@
 
 [post_model_sync]
 cosmo_erp.patches.v0_2.hydrate_ravaka_initial_stock
+cosmo_erp.patches.v0_2.grant_cosmo_role_permissions

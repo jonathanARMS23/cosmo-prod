@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900 antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Empêche le zoom iOS au focus des inputs (font-size < 16px). */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
