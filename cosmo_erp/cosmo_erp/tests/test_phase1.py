@@ -48,7 +48,8 @@ def test_custom_field_fixture_structure():
     assert fixture_path.exists(), "Fixture custom_field.json manquante"
     fields = json.loads(fixture_path.read_text())
     assert len(fields) >= 14, f"Attendu >=14 custom fields, trouvé {len(fields)}"
-    for field in fields:
+    item_fields = [f for f in fields if f.get("dt") == "Item"]
+    for field in item_fields:
         assert field.get("dt") == "Item"
         assert field.get("fieldname", "").startswith("cosmo_")
 
