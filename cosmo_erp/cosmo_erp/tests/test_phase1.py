@@ -6,7 +6,7 @@ def test_cosmo_supplier_order_item_fields():
     """Vérifie que les champs requis du Child Table sont définis."""
     import json
     from pathlib import Path
-    json_path = Path(__file__).parent.parent / "doctype/cosmo_supplier_order_item/cosmo_supplier_order_item.json"
+    json_path = Path(__file__).parent.parent / "cosmo_erp/doctype/cosmo_supplier_order_item/cosmo_supplier_order_item.json"
     assert json_path.exists(), "Fichier JSON du Child Table manquant"
     dt = json.loads(json_path.read_text())
     field_names = [f["fieldname"] for f in dt.get("fields", [])]
@@ -18,7 +18,7 @@ def test_cosmo_supplier_order_fields():
     """Vérifie la structure du DocType principal."""
     import json
     from pathlib import Path
-    json_path = Path(__file__).parent.parent / "doctype/cosmo_supplier_order/cosmo_supplier_order.json"
+    json_path = Path(__file__).parent.parent / "cosmo_erp/doctype/cosmo_supplier_order/cosmo_supplier_order.json"
     assert json_path.exists(), "Fichier JSON du DocType manquant"
     dt = json.loads(json_path.read_text())
     assert dt["is_submittable"] == 1
@@ -32,7 +32,7 @@ def test_cosmo_product_scan_fields():
     """Vérifie la structure du DocType Cosmo Product Scan."""
     import json
     from pathlib import Path
-    json_path = Path(__file__).parent.parent / "doctype/cosmo_product_scan/cosmo_product_scan.json"
+    json_path = Path(__file__).parent.parent / "cosmo_erp/doctype/cosmo_product_scan/cosmo_product_scan.json"
     assert json_path.exists(), "Fichier JSON manquant"
     dt = json.loads(json_path.read_text())
     field_names = [f["fieldname"] for f in dt.get("fields", [])]

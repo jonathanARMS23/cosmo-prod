@@ -7,7 +7,7 @@ BASE = Path(__file__).parent.parent
 
 
 def test_cosmo_pos_page_json_exists():
-    p = BASE / "page/cosmo_pos/cosmo_pos.json"
+    p = BASE / "cosmo_erp/page/cosmo_pos/cosmo_pos.json"
     assert p.exists()
     data = json.loads(p.read_text())
     assert data["doctype"] == "Page"
@@ -16,7 +16,7 @@ def test_cosmo_pos_page_json_exists():
 
 
 def test_cosmo_pos_js_has_page_hook():
-    p = BASE / "page/cosmo_pos/cosmo_pos.js"
+    p = BASE / "cosmo_erp/page/cosmo_pos/cosmo_pos.js"
     assert p.exists()
     content = p.read_text()
     assert "frappe.pages['cosmo-pos'].on_page_load" in content
@@ -24,7 +24,7 @@ def test_cosmo_pos_js_has_page_hook():
 
 
 def test_cosmo_pos_py_has_whitelisted_endpoints():
-    p = BASE / "page/cosmo_pos/cosmo_pos.py"
+    p = BASE / "cosmo_erp/page/cosmo_pos/cosmo_pos.py"
     assert p.exists()
     content = p.read_text()
     for fn in ["get_items_with_stock", "create_sale", "get_daily_summary", "close_register"]:
@@ -42,7 +42,7 @@ def test_print_format_fixture_exists():
 
 
 def test_cosmo_invoice_html_template_exists():
-    p = BASE / "print_format/cosmo_invoice.html"
+    p = BASE / "cosmo_erp/print_format/cosmo_invoice.html"
     assert p.exists()
     content = p.read_text()
     assert "doc.items" in content

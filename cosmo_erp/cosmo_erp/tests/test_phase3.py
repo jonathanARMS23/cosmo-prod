@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 BASE = Path(__file__).parent.parent
-DASHBOARD_PY = BASE / "dashboard/cosmo_dashboard.py"
+DASHBOARD_PY = BASE / "cosmo_erp/dashboard/cosmo_dashboard.py"
 SETUP_PY = BASE / "setup/dashboard_setup.py"
 WEEKLY_PY = BASE / "tasks/weekly.py"
 EMAIL_HTML = BASE / "templates/emails/cosmo_weekly_report.html"
@@ -70,7 +70,7 @@ def test_date_filter_logic():
 
 
 def test_hooks_has_dashboard_fixtures():
-    hooks = (BASE.parent / "hooks.py").read_text()
+    hooks = (BASE / "hooks.py").read_text()
     assert "Number Card" in hooks
     assert "Dashboard Chart" in hooks
     assert "Dashboard" in hooks
