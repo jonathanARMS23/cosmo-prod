@@ -1,3 +1,18 @@
 .env.prod
+.env
+.env.local
 *.log
 .DS_Store
+
+# Node.js
+node_modules/
+dist/
+
+# Python / Frappe
+__pycache__/
+*.pyc
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
