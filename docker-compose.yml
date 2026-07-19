@@ -156,7 +156,17 @@ services:
           --preload
 
   frontend:
-    image: frappe/erpnext:v15
+    # DOIT être la même image (même build) que backend/websocket/etc : nginx
+    # sert sites/assets (symlink -> assets baked dans l'image), et le HTML
+    # généré par backend référence des noms de bundle CSS/JS hashés depuis
+    # SON PROPRE assets.json. Si frontend tourne une image frappe/erpnext:v15
+    # différente (tag mouvant, pull à un autre moment), les hash ne
+    # correspondent plus -> tous les CSS/JS 404 (confirmé en prod : symlink
+    # correct, mais login.bundle.SLNJ3LIY.css servi vs .PV6T7PK4.css attendu).
+    image: cosmo_erp-frappe:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.frappe
     restart: unless-stopped
     command: nginx-entrypoint.sh
     environment:
