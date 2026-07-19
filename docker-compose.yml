@@ -76,6 +76,37 @@ services:
           grep -qF "cosmo_erp" sites/apps.txt || echo "cosmo_erp" >> sites/apps.txt
         fi
 
+  # One-shot : rejoue `bench migrate` à chaque déploiement pour appliquer les
+  # patches (cosmo_erp.patches.*) qui, sinon, ne s'appliquent jamais après la
+  # création initiale du site. Le backend n'est servi qu'une fois ce service OK.
+  migrate:
+    image: frappe/erpnext:v15
+    restart: "no"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+      - ./cosmo_erp:/home/frappe/frappe-bench/apps/cosmo_erp
+    environment:
+      - FRAPPE_SITE_NAME=${FRAPPE_SITE_NAME:-cosmo.localhost}
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+    networks: [cosmo-net]
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - |
+        LOG=/home/frappe/frappe-bench/sites/migrate.log
+        echo "=== START migrate $$(date -u) ===" > $$LOG
+        /home/frappe/frappe-bench/env/bin/pip install -q --no-deps -e /home/frappe/frappe-bench/apps/cosmo_erp >> $$LOG 2>&1
+        echo "pip exit=$$?" >> $$LOG
+        echo "--- bench migrate site=$$FRAPPE_SITE_NAME ---" >> $$LOG
+        bench --site $$FRAPPE_SITE_NAME migrate >> $$LOG 2>&1
+        STATUS=$$?
+        echo "migrate exit=$$STATUS" >> $$LOG
+        exit $$STATUS
+
   backend:
     image: frappe/erpnext:v15
     restart: unless-stopped
@@ -96,7 +127,7 @@ services:
         condition: service_started
       redis-queue:
         condition: service_started
-      create-site:
+      migrate:
         condition: service_completed_successfully
     networks: [cosmo-net]
     entrypoint:
