@@ -12,6 +12,65 @@ import frappe
 from frappe import _
 from frappe.utils import flt, cint, nowdate, now_datetime, add_days, get_first_day
 
+# TTL de la clé d'idempotence create_sale — assez long pour couvrir un retry
+# après coupure réseau (fréquent à Madagascar), assez court pour ne pas
+# accumuler indéfiniment dans le cache Redis.
+SALE_IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AUTH / SESSION — pour le portail employés (BFF Next.js)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@frappe.whitelist()
+def get_current_user_context():
+    """Retourne l'utilisateur connecté et ses rôles Cosmo, pour piloter l'UI du portail.
+
+    Appelé juste après le login (POST /api/method/login) pour savoir si
+    l'employé est Caissière, Manager, ou les deux — le portail affiche/masque
+    ses écrans en conséquence (pas de logique de permission dupliquée côté
+    front : Frappe reste la seule source de vérité des rôles).
+
+    Returns:
+        dict: {user, full_name, roles, is_manager, is_cashier, message}
+    """
+    user = frappe.session.user
+    if user == "Guest":
+        frappe.throw(_("Non authentifié."), frappe.AuthenticationError)
+
+    roles = frappe.get_roles(user)
+    full_name = frappe.db.get_value("User", user, "full_name") or user
+
+    return {
+        "user": user,
+        "full_name": full_name,
+        "roles": roles,
+        "is_manager": "Cosmo Manager" in roles,
+        "is_cashier": "Cosmo Caissière" in roles,
+        "message": f"Connecté en tant que {full_name}.",
+    }
+
+
+@frappe.whitelist()
+def get_csrf_token():
+    """Retourne le jeton CSRF de la session courante.
+
+    Nécessaire pour tout POST du portail (create_sale, receive_stock,
+    adjust_stock, ...) une fois authentifié par cookie de session `sid`
+    (le portail utilise l'auth par session, pas par API Key — voir header
+    du module). Frappe exige ce jeton sur les requêtes en écriture faites
+    par un utilisateur en session cookie, pour se protéger du CSRF.
+
+    Returns:
+        dict: {csrf_token, message}
+    """
+    if frappe.session.user == "Guest":
+        frappe.throw(_("Non authentifié."), frappe.AuthenticationError)
+    return {
+        "csrf_token": frappe.sessions.get_csrf_token(),
+        "message": "Jeton CSRF généré.",
+    }
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # STOCK & PRODUITS
@@ -78,6 +137,62 @@ def get_item_stock(item_code=None, item_name=None):
             f"{item.item_name} : {total_qty} {item.stock_uom} en stock."
             + (" Stock bas (sous le seuil de reapprovisionnement)." if is_low else "")
         ),
+    }
+
+
+@frappe.whitelist()
+def get_stock_for_items(item_codes):
+    """Retourne le stock actuel pour une LISTE de produits en un seul appel.
+
+    Pensé pour le panier du portail POS : rafraîchir le stock de toutes les
+    lignes du panier juste avant l'encaissement sans faire N appels à
+    get_item_stock (un par article).
+
+    Args:
+        item_codes: JSON list de item_code, ex. ["ITEM-001", "ITEM-002"]
+
+    Returns:
+        dict: {items: {item_code: {qty, is_low_stock}}, message}
+    """
+    import json
+    if isinstance(item_codes, str):
+        item_codes = json.loads(item_codes)
+
+    if not item_codes:
+        frappe.throw(_("La liste item_codes ne peut pas être vide."))
+    if len(item_codes) > 200:
+        frappe.throw(_("Maximum 200 articles par appel."))
+
+    rows = frappe.db.sql("""
+        SELECT
+            i.item_code,
+            i.cosmo_reorder_level,
+            COALESCE(SUM(bin.actual_qty), 0) AS qty
+        FROM `tabItem` i
+        LEFT JOIN `tabBin` bin ON bin.item_code = i.item_code
+        WHERE i.item_code IN %(codes)s
+        GROUP BY i.item_code
+    """, {"codes": tuple(item_codes)}, as_dict=True)
+
+    by_code = {}
+    for r in rows:
+        reorder = flt(r.cosmo_reorder_level)
+        qty = flt(r.qty)
+        by_code[r.item_code] = {
+            "qty": qty,
+            "is_low_stock": qty < reorder if reorder > 0 else False,
+        }
+
+    # Les codes demandés mais introuvables (désactivé, supprimé, faute de frappe)
+    # sont explicitement signalés à qty=None plutôt que silencieusement omis —
+    # le panier du portail doit pouvoir distinguer "stock 0" de "produit invalide".
+    for code in item_codes:
+        if code not in by_code:
+            by_code[code] = {"qty": None, "is_low_stock": False}
+
+    return {
+        "items": by_code,
+        "message": f"Stock rafraîchi pour {len(item_codes)} article(s).",
     }
 
 
@@ -357,7 +472,7 @@ def update_item_price(item_code, new_price):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @frappe.whitelist()
-def create_sale(items, customer=None, payment_mode="Cash", discount=0):
+def create_sale(items, customer=None, payment_mode="Cash", discount=0, idempotency_key=None):
     """Crée une vente (Sales Invoice) et décrémente le stock.
 
     Args:
@@ -365,6 +480,13 @@ def create_sale(items, customer=None, payment_mode="Cash", discount=0):
         customer: nom client (défaut "Walk-in Customer")
         payment_mode: "Cash" | "Card" | "Mobile Money"
         discount: remise en % (0-100)
+        idempotency_key: identifiant unique généré côté portail (ex. UUID) au
+            moment où la caissière tape "Encaisser". Si le même appel est
+            rejoué (retry après coupure réseau, double-tap), la facture n'est
+            PAS créée deux fois : la réponse déjà obtenue est simplement
+            renvoyée. Fortement recommandé depuis le portail, optionnel pour
+            les autres appelants (Hermes/MCP) qui gèrent déjà leurs propres
+            retries en amont.
 
     Returns:
         dict: {invoice_name, total, grand_total, status, items_detail, message}
@@ -375,6 +497,21 @@ def create_sale(items, customer=None, payment_mode="Cash", discount=0):
 
     if not items:
         frappe.throw(_("La liste d'articles ne peut pas être vide."))
+
+    cache_key = None
+    if idempotency_key:
+        cache_key = f"cosmo_sale_idem:{idempotency_key}"
+        # expires=True : cette clé porte une expiration (voir set_value plus
+        # bas). Sans ce flag, RedisWrapper.get_value() met le résultat (y
+        # compris None si rien n'est encore présent) en cache LOCAL au
+        # process (frappe.local.cache) et ne revérifiera plus jamais Redis
+        # pour cette clé tant que le process vit — un retry légitime dans le
+        # même worker gunicorn recevrait alors un faux None et créerait un
+        # doublon (confirmé par repro : bench console reproduit exactement
+        # ce piège car il garde `frappe.local.cache` sur toute la session).
+        cached = frappe.cache().get_value(cache_key, expires=True)
+        if cached:
+            return cached
 
     discount = min(max(flt(discount), 0), 100)
 
@@ -430,8 +567,17 @@ def create_sale(items, customer=None, payment_mode="Cash", discount=0):
     }
     erp_payment_mode = payment_map.get(payment_mode, "Cash")
 
+    # frappe.get_doc(dict).insert() ne passe PAS par le mécanisme de valeurs
+    # par défaut habituellement appliqué par le JS du formulaire Desk (qui
+    # préremplit "company" depuis les Global Defaults à l'ouverture du
+    # formulaire) — sans ce champ explicite, set_missing_values() plante avec
+    # "Please select a Company" (confirmé par repro locale : create_sale
+    # n'avait jamais été exécuté de bout en bout jusqu'ici).
+    company = _get_default_company()
+
     invoice = frappe.get_doc({
         "doctype": "Sales Invoice",
+        "company": company,
         "customer": customer,
         "posting_date": nowdate(),
         "is_pos": 1,
@@ -448,8 +594,24 @@ def create_sale(items, customer=None, payment_mode="Cash", discount=0):
     if invoice.payments:
         invoice.payments[0].amount = invoice.grand_total
 
+    from erpnext.stock.stock_ledger import NegativeStockError
+
     invoice.insert(ignore_permissions=True)
-    invoice.submit()
+    try:
+        invoice.submit()
+    except NegativeStockError:
+        # Une autre vente a pris le stock restant entre la vérification
+        # ci-dessus et ce submit (deux caisses sur le même dernier article) —
+        # ERPNext refuse le mouvement de stock négatif au niveau du grand
+        # livre, c'est la vraie protection anti-survente. On nettoie la
+        # facture non soumise et on renvoie un message clair plutôt qu'une
+        # trace technique brute.
+        invoice.delete(ignore_permissions=True)
+        frappe.db.commit()
+        frappe.throw(_(
+            "Stock insuffisant : un ou plusieurs articles viennent d'être vendus "
+            "par une autre caisse. Vérifiez le panier et réessayez."
+        ))
     frappe.db.commit()
 
     items_detail = [
@@ -457,7 +619,7 @@ def create_sale(items, customer=None, payment_mode="Cash", discount=0):
         for i in resolved_items
     ]
 
-    return {
+    result = {
         "invoice_name": invoice.name,
         "customer": customer,
         "total": flt(invoice.net_total),
@@ -468,6 +630,11 @@ def create_sale(items, customer=None, payment_mode="Cash", discount=0):
         "items_detail": items_detail,
         "message": f"Vente creee : {invoice.name} — {invoice.grand_total:.0f} Ar ({payment_mode}).",
     }
+
+    if cache_key:
+        frappe.cache().set_value(cache_key, result, expires_in_sec=SALE_IDEMPOTENCY_TTL_SECONDS)
+
+    return result
 
 
 @frappe.whitelist()
@@ -622,6 +789,7 @@ def receive_stock(item_code, qty, rate, supplier=None, batch_no=None, expiry_dat
         frappe.throw(_("La quantité doit être supérieure à 0."))
 
     default_warehouse = frappe.db.get_single_value("Stock Settings", "default_warehouse") or "Stores - C"
+    stock_uom = frappe.db.get_value("Item", item_code, "stock_uom")
 
     se = frappe.get_doc({
         "doctype": "Stock Entry",
@@ -635,6 +803,14 @@ def receive_stock(item_code, qty, rate, supplier=None, batch_no=None, expiry_dat
             "t_warehouse": default_warehouse,
             "batch_no": batch_no or "",
             "expiry_date": expiry_date or None,
+            # uom + conversion_factor explicites : sans ça, set_missing_values()
+            # ne les déduit pas toujours tout seul côté serveur (uniquement
+            # rempli normalement par le JS du formulaire Desk) et l'insert
+            # échoue avec "UOM Conversion Factor is mandatory" (confirmé par
+            # repro locale — receive_stock n'avait jamais été testé de bout
+            # en bout jusqu'ici).
+            "uom": stock_uom,
+            "conversion_factor": 1,
         }],
     })
     se.set_missing_values()
@@ -1144,6 +1320,32 @@ def get_revenue_trend(days=30):
 # ══════════════════════════════════════════════════════════════════════════════
 # HELPERS PRIVES
 # ══════════════════════════════════════════════════════════════════════════════
+
+def _get_default_company():
+    """Résout la Company par défaut pour les documents créés côté serveur
+    (Sales Invoice, etc.) sans passer par le JS du formulaire Desk.
+
+    Ordre : Global Defaults > Default Company, sinon l'unique Company du
+    site (site à une seule boutique — cas de cosmo_erp). Échoue proprement
+    si aucune Company n'existe ou si plusieurs existent sans default défini,
+    plutôt que de deviner (même logique que le patch d'hydratation Ravaka).
+    """
+    default_company = frappe.defaults.get_global_default("company")
+    if default_company and frappe.db.exists("Company", default_company):
+        return default_company
+
+    companies = frappe.get_all("Company", pluck="name")
+    if len(companies) == 1:
+        return companies[0]
+
+    if not companies:
+        frappe.throw(_("Aucune Company configurée sur ce site. Configurez-en une avant de créer une vente."))
+
+    frappe.throw(_(
+        "Impossible de déterminer la Company pour cette vente : {0} Companies existent "
+        "et aucune n'est définie par défaut (Setup > Global Defaults > Default Company)."
+    ).format(len(companies)))
+
 
 def _ensure_walkin_customer():
     """Crée le client Walk-in Customer s'il n'existe pas."""
