@@ -53,9 +53,17 @@ services:
       - |
         LOG=/home/frappe/frappe-bench/sites/create-site.log
         echo "=== START ===" > $$LOG
+        echo "--- ls apps/cosmo_erp (debug mount) ---" >> $$LOG
+        ls -la /home/frappe/frappe-bench/apps/cosmo_erp >> $$LOG 2>&1
         echo "pip install cosmo_erp..." >> $$LOG
         /home/frappe/frappe-bench/env/bin/pip install -q --no-deps -e /home/frappe/frappe-bench/apps/cosmo_erp >> $$LOG 2>&1
-        echo "pip exit=$$?" >> $$LOG
+        PIP_STATUS=$$?
+        echo "pip exit=$$PIP_STATUS" >> $$LOG
+        if [ $$PIP_STATUS -ne 0 ]; then
+          echo "=== pip install FAILED, aborting (was silently ignored before) ===" >> $$LOG
+          cat $$LOG
+          exit $$PIP_STATUS
+        fi
         grep -qF "cosmo_erp" sites/apps.txt || echo "cosmo_erp" >> sites/apps.txt
         echo "site=$$FRAPPE_SITE_NAME" >> $$LOG
         if [ ! -f /home/frappe/frappe-bench/sites/$$FRAPPE_SITE_NAME/site_config.json ]; then
@@ -102,8 +110,16 @@ services:
       - |
         LOG=/home/frappe/frappe-bench/sites/migrate.log
         echo "=== START migrate $$(date -u) ===" > $$LOG
+        echo "--- ls apps/cosmo_erp (debug mount) ---" >> $$LOG
+        ls -la /home/frappe/frappe-bench/apps/cosmo_erp >> $$LOG 2>&1
         /home/frappe/frappe-bench/env/bin/pip install -q --no-deps -e /home/frappe/frappe-bench/apps/cosmo_erp >> $$LOG 2>&1
-        echo "pip exit=$$?" >> $$LOG
+        PIP_STATUS=$$?
+        echo "pip exit=$$PIP_STATUS" >> $$LOG
+        if [ $$PIP_STATUS -ne 0 ]; then
+          echo "=== pip install FAILED, aborting before bench migrate (was silently ignored before) ===" >> $$LOG
+          cat $$LOG
+          exit $$PIP_STATUS
+        fi
         echo "--- bench migrate site=$$FRAPPE_SITE_NAME ---" >> $$LOG
         bench --site $$FRAPPE_SITE_NAME migrate >> $$LOG 2>&1
         STATUS=$$?
