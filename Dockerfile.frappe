@@ -3,8 +3,12 @@ FROM frappe/erpnext:v15
 USER frappe
 WORKDIR /home/frappe/frappe-bench
 
-# Copy cosmo_erp and install as editable into frappe virtualenv.
-# Volume mount at runtime overrides these files with the real code;
-# the .pth file pip creates keeps pointing to the same path.
+# Copy cosmo_erp and install as editable into frappe virtualenv, baked into
+# the image at build time. Do NOT bind-mount apps/cosmo_erp at runtime on top
+# of this — Coolify's Docker Compose runtime directory is not git-synced (only
+# its separate build context is), so a runtime bind mount there stays a
+# permanently empty host directory and shadows this COPY entirely (confirmed
+# in production: pip install -e failed with "does not appear to be a Python
+# project" because the mount hid the code baked in here).
 COPY --chown=frappe:frappe cosmo_erp/ apps/cosmo_erp/
 RUN env/bin/pip install -q --no-deps -e apps/cosmo_erp
