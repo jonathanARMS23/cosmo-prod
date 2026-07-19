@@ -49,7 +49,25 @@ FIXTURE_RELPATH = ("fixtures", "ravaka_initial_stock.json")
 
 
 def execute():
-    """Point d'entrée du patch (appelé par `bench migrate`)."""
+    """Point d'entrée du patch (appelé par `bench migrate`).
+
+    IMPORTANT : ce patch ne doit JAMAIS faire échouer `bench migrate` dans son
+    ensemble — une erreur ici bloquerait toutes les migrations Frappe/ERPNext
+    (donc le démarrage complet du site) pour un problème d'import de données
+    legacy non critique. Toute exception est donc journalisée puis avalée.
+    """
+    try:
+        _run()
+    except Exception:
+        frappe.db.rollback()
+        frappe.log_error(
+            title="Ravaka hydrate — échec global (patch avalé, migrate continue)",
+            message=frappe.get_traceback(),
+        )
+        print("Ravaka hydrate — ÉCHEC GLOBAL, voir Error Log. Le patch n'a pas bloqué migrate.")
+
+
+def _run():
     entries = _load_fixture()
 
     _ensure_currency()
@@ -155,6 +173,11 @@ def _ensure_company():
         "abbr": COMPANY_ABBR,
         "default_currency": COMPANY_CURRENCY,
         "country": COMPANY_COUNTRY,
+        # Madagascar n'a pas de modèle de plan comptable ERPNext dédié :
+        # forcer explicitement le template générique "Standard" évite que
+        # Company.after_insert() échoue en cherchant un CoA par pays.
+        "create_chart_of_accounts_based_on": "Standard Template",
+        "chart_of_accounts": "Standard",
     }).insert(ignore_permissions=True)
     frappe.db.commit()
 

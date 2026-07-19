@@ -69,6 +69,9 @@ services:
           echo "exit=$$STATUS" >> $$LOG
           if [ $$STATUS -eq 0 ]; then
             grep -qF "cosmo_erp" sites/apps.txt || echo "cosmo_erp" >> sites/apps.txt
+          else
+            echo "=== create-site FAILED, dumping $$LOG to container output for Coolify/docker logs ==="
+            cat $$LOG
           fi
           exit $$STATUS
         else
@@ -105,6 +108,10 @@ services:
         bench --site $$FRAPPE_SITE_NAME migrate >> $$LOG 2>&1
         STATUS=$$?
         echo "migrate exit=$$STATUS" >> $$LOG
+        if [ $$STATUS -ne 0 ]; then
+          echo "=== migrate FAILED, dumping $$LOG to container output for Coolify/docker logs ==="
+          cat $$LOG
+        fi
         exit $$STATUS
 
   backend:
