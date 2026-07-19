@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 BASE = Path(__file__).parent.parent
-FIXTURE = BASE / "fixtures/ravaka_initial_stock.json"
+FIXTURE = BASE / "data/ravaka_initial_stock.json"
 PATCHES_TXT = BASE / "patches.txt"
 PATCH_MODULE = "cosmo_erp.patches.v0_2.hydrate_ravaka_initial_stock"
 

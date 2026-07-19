@@ -1,7 +1,13 @@
 """Patch d'hydratation : injecte le catalogue initial Ravaka + stock d'ouverture.
 
-Source : cosmo_erp/fixtures/ravaka_initial_stock.json (279 entrées {item_code, qty},
+Source : cosmo_erp/data/ravaka_initial_stock.json (279 entrées {item_code, qty},
 déjà nettoyées, dédupliquées et agrégées en amont — NE PAS resommer ici).
+
+IMPORTANT : ce fichier NE DOIT PAS vivre dans fixtures/ — Frappe scanne tout
+`<app>/fixtures/*.json` et tente d'importer chaque fichier comme une liste de
+documents complets (frappe/utils/fixtures.py::import_fixtures), ce qui casse
+avec KeyError('doctype') sur un fichier qui n'a pas cette forme (confirmé par
+repro locale). D'où le dossier data/ dédié, ignoré par ce mécanisme.
 
 Ce patch est idempotent :
   - Frappe trace l'exécution unique via le Patch Log (bench migrate ne le rejoue pas) ;
@@ -45,7 +51,7 @@ COMPANY_COUNTRY = "Madagascar"
 WAREHOUSE_NAME = "Stores - RAV"
 ITEM_GROUP = "Products"
 STOCK_UOM = "Nos"
-FIXTURE_RELPATH = ("fixtures", "ravaka_initial_stock.json")
+FIXTURE_RELPATH = ("data", "ravaka_initial_stock.json")
 
 
 def execute():
@@ -71,8 +77,12 @@ def _run():
     entries = _load_fixture()
 
     _ensure_currency()
+    _ensure_warehouse_type_transit()
     _ensure_company()
     _ensure_warehouse()
+    _ensure_uom_nos()
+    _ensure_item_group_products()
+    _ensure_fiscal_year()
 
     stats = {"items_created": 0, "items_existing": 0, "sr_created": 0, "sr_skipped": 0}
     failures = []
@@ -89,18 +99,34 @@ def _run():
                 stats["items_created"] += 1
             else:
                 stats["items_existing"] += 1
+            # Commit immédiatement : si la Stock Reconciliation échoue ensuite,
+            # frappe.db.rollback() ne doit PAS aussi défaire la création de
+            # l'Item (confirmé par repro locale : sans ce commit, un item
+            # recréé "avec succès" à chaque rejeu du patch après un échec SR).
+            frappe.db.commit()
+        except Exception:
+            frappe.db.rollback()
+            failures.append(f"{item_code}: {frappe.get_traceback(with_context=False)}")
+            frappe.log_error(
+                title=f"Ravaka hydrate — échec item {item_code}",
+                message=frappe.get_traceback(),
+            )
+            continue
 
+        try:
             if qty and qty > 0:
                 if _create_opening_stock(item_code, qty):
                     stats["sr_created"] += 1
                 else:
                     stats["sr_skipped"] += 1
+            frappe.db.commit()
         except Exception:
-            # Un item en échec ne doit pas faire planter tout le patch.
+            # Un échec de stock reconciliation ne doit pas faire planter tout
+            # le patch, ni défaire l'Item déjà committé ci-dessus.
             frappe.db.rollback()
-            failures.append(f"{item_code}: {frappe.get_traceback(with_context=False)}")
+            failures.append(f"{item_code} (stock reconciliation): {frappe.get_traceback(with_context=False)}")
             frappe.log_error(
-                title=f"Ravaka hydrate — échec item {item_code}",
+                title=f"Ravaka hydrate — échec stock reconciliation {item_code}",
                 message=frappe.get_traceback(),
             )
 
@@ -135,6 +161,24 @@ def _load_fixture():
 
 
 # ── Currency / Company / Warehouse ───────────────────────────────────────────
+def _ensure_warehouse_type_transit():
+    """Crée le Warehouse Type "Transit" s'il est absent.
+
+    Sur un site créé directement via `bench new-site --install-app` (sans passer
+    par le Setup Wizard ERPNext), ce master n'existe pas encore. Or
+    `Company.on_update() -> create_default_warehouses()` crée un entrepôt
+    "Goods In Transit" lié à `warehouse_type="Transit"` : sans ce master, la
+    création de la Company échoue avec un LinkValidationError (confirmé par
+    repro locale). ERPNext ne fournit pas de fixture pour ce master hors
+    Setup Wizard, donc on le crée nous-mêmes, idempotent.
+    """
+    if not frappe.db.exists("Warehouse Type", "Transit"):
+        frappe.get_doc({
+            "doctype": "Warehouse Type",
+            "name": "Transit",
+        }).insert(ignore_permissions=True)
+
+
 def _ensure_currency():
     if not frappe.db.exists("Currency", COMPANY_CURRENCY):
         frappe.get_doc({
@@ -199,6 +243,72 @@ def _ensure_warehouse():
     frappe.db.commit()
 
 
+# ── UOM / Item Group ─────────────────────────────────────────────────────────
+def _ensure_uom_nos():
+    """Crée l'UOM "Nos" si absente.
+
+    Sur un site sans Setup Wizard exécuté, aucun UOM standard n'existe (ils
+    sont normalement importés depuis erpnext/setup/setup_wizard/data/uom_data.json
+    par le wizard, jamais par `bench new-site --install-app`). Valeurs reprises
+    à l'identique de ce fichier officiel pour rester cohérent avec un site qui
+    aurait, lui, suivi le Setup Wizard normalement.
+    """
+    if not frappe.db.exists("UOM", STOCK_UOM):
+        frappe.get_doc({
+            "doctype": "UOM",
+            "uom_name": STOCK_UOM,
+            "must_be_whole_number": 1,
+        }).insert(ignore_permissions=True)
+        frappe.db.commit()
+
+
+def _ensure_fiscal_year():
+    """Crée le Fiscal Year (année civile) couvrant la date du jour, s'il est absent.
+
+    Aucun Fiscal Year n'existe sans Setup Wizard. Sans lui, la validation du
+    Stock Ledger Entry lors du submit d'une Stock Reconciliation échoue avec
+    `FiscalYearError: Date ... is not in any active Fiscal Year` (confirmé par
+    repro locale). Année civile simple (01-01 -> 31-12), cohérent avec le
+    calendrier standard utilisé par défaut par ERPNext hors configuration
+    spécifique.
+    """
+    today = frappe.utils.getdate(frappe.utils.today())
+    year_name = str(today.year)
+    if frappe.db.exists("Fiscal Year", year_name):
+        return
+    frappe.get_doc({
+        "doctype": "Fiscal Year",
+        "year": year_name,
+        "year_start_date": f"{today.year}-01-01",
+        "year_end_date": f"{today.year}-12-31",
+    }).insert(ignore_permissions=True)
+    frappe.db.commit()
+
+
+def _ensure_item_group_products():
+    """Crée l'arbre Item Group "All Item Groups" > "Products" si absent.
+
+    Même cause que ci-dessus : aucun Item Group n'existe sans Setup Wizard.
+    """
+    root = "All Item Groups"
+    if not frappe.db.exists("Item Group", root):
+        frappe.get_doc({
+            "doctype": "Item Group",
+            "item_group_name": root,
+            "is_group": 1,
+        }).insert(ignore_permissions=True)
+        frappe.db.commit()
+
+    if not frappe.db.exists("Item Group", ITEM_GROUP):
+        frappe.get_doc({
+            "doctype": "Item Group",
+            "item_group_name": ITEM_GROUP,
+            "is_group": 0,
+            "parent_item_group": root,
+        }).insert(ignore_permissions=True)
+        frappe.db.commit()
+
+
 # ── Item ─────────────────────────────────────────────────────────────────────
 def _ensure_item(item_code):
     """Crée l'Item s'il n'existe pas. Retourne True si créé, False si déjà présent."""
@@ -237,6 +347,12 @@ def _create_opening_stock(item_code, qty):
         "doctype": "Stock Reconciliation",
         "purpose": "Opening Stock",
         "company": COMPANY_NAME,
+        # Une Opening Entry exige un compte de différence de type Asset/Liability
+        # (validate_expense_account côté ERPNext) — "Temporary Opening" est le
+        # compte standard du Chart of Accounts "Standard" prévu pour ça (confirmé
+        # par repro locale : sans ce champ, ERPNext prend un compte Expense par
+        # défaut et rejette la réconciliation).
+        "expense_account": f"Temporary Opening - {COMPANY_ABBR}",
         "items": [{
             "item_code": item_code,
             "warehouse": WAREHOUSE_NAME,
