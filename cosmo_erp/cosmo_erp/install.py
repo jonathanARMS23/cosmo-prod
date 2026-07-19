@@ -7,6 +7,17 @@ def after_install():
     create_roles()
     setup_localization()
     try:
+        # Appelé directement ici (en plus d'être un patch) : sur une
+        # installation fraîche, `bench install-app` marque tous les patches
+        # de patches.txt comme déjà exécutés SANS les lancer
+        # (set_all_patches_as_completed) — confirmé par repro locale, même
+        # piège que le patch d'hydratation Ravaka. after_install(), lui,
+        # tourne toujours réellement sur un site neuf.
+        from cosmo_erp.patches.v0_2.grant_cosmo_role_permissions import execute as grant_cosmo_role_permissions
+        grant_cosmo_role_permissions()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Cosmo: Erreur permissions rôles (non bloquant)")
+    try:
         create_workspace()
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Cosmo: Erreur création Workspace (non bloquant)")

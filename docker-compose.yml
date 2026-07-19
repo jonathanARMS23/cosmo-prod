@@ -325,6 +325,22 @@ services:
   # Hermes Agent tourne sur Hostinger (serveur externe)
   # Il se connecte à cosmo-mcp via http://95.216.187.73:3100
 
+  # Portail employés (Caisse + Stock) — Next.js, BFF vers l'API cosmo_erp.
+  # Aucun secret (mot de passe, cookie sid Frappe) n'atteint le navigateur :
+  # le portail relaie toutes les requêtes Frappe côté serveur.
+  portail:
+    build:
+      context: ./portail
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - ERPNEXT_URL=http://frontend:8080
+      - SESSION_SECRET=${PORTAIL_SESSION_SECRET}
+      - NODE_ENV=production
+    ports: ["3000:3000"]
+    depends_on: [frontend]
+    networks: [cosmo-net]
+
 volumes:
   sites:
   logs:
