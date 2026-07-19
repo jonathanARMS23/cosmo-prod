@@ -76,8 +76,35 @@ services:
           fi
           exit $$STATUS
         else
-          echo "Site exists, skipping." >> $$LOG
+          echo "Site exists, skipping bench new-site." >> $$LOG
           grep -qF "cosmo_erp" sites/apps.txt || echo "cosmo_erp" >> sites/apps.txt
+          # Site déjà existant AVANT que cosmo_erp existe (ex. créé via le Setup
+          # Wizard) : bench new-site ne tourne jamais ici, donc cosmo_erp n'a
+          # jamais été installé sur ce site précis même si l'app est listée dans
+          # sites/apps.txt (qui ne liste que les apps DISPONIBLES dans le bench,
+          # pas les apps installées PAR SITE). Confirmé en prod : apps.txt
+          # contenait cosmo_erp mais tabInstalled Application n'avait que
+          # frappe+erpnext. On l'installe ici a posteriori si besoin, idempotent
+          # (bench install-app est un no-op si déjà installée).
+          if bench --site $$FRAPPE_SITE_NAME list-apps 2>>$$LOG | grep -qF "cosmo_erp"; then
+            echo "cosmo_erp déjà installée sur le site." >> $$LOG
+          else
+            echo "--- bench install-app cosmo_erp (site existant) ---" >> $$LOG
+            bench --site $$FRAPPE_SITE_NAME install-app cosmo_erp >> $$LOG 2>&1
+            STATUS=$$?
+            echo "install-app exit=$$STATUS" >> $$LOG
+            if [ $$STATUS -ne 0 ]; then
+              echo "=== install-app cosmo_erp FAILED, dumping $$LOG ===" >> $$LOG
+              cat $$LOG
+              exit $$STATUS
+            fi
+            # bench install-app marque TOUS les patches.txt de cosmo_erp comme
+            # déjà exécutés sans les lancer (set_all_patches_as_completed, pas
+            # de flag CLI pour désactiver ça) — on force la ré-exécution réelle
+            # du patch d'hydratation Ravaka au prochain `bench migrate`.
+            echo "--- force_rerun hydrate_ravaka_initial_stock ---" >> $$LOG
+            bench --site $$FRAPPE_SITE_NAME execute cosmo_erp.patches.v0_2.hydrate_ravaka_initial_stock.force_rerun >> $$LOG 2>&1
+          fi
         fi
 
   # One-shot : rejoue `bench migrate` à chaque déploiement pour appliquer les

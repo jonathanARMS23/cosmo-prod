@@ -16,9 +16,21 @@ Ce patch est idempotent :
     (`bench execute ...` ou `bench migrate --skip-failing`) sans doublons ni erreurs.
 
 Décisions techniques documentées :
-  - Company        : "Ravaka" (abbr "RAV"), devise MGA, pays Madagascar.
-  - Warehouse      : "Stores - RAV" (créé si absent — ERPNext le crée en général
-                     automatiquement à la création de la Company).
+  - Company        : la Company CIBLE n'est PAS codée en dur. Résolue dans l'ordre :
+                     1) Global Defaults > Default Company si défini,
+                     2) l'unique Company existante si une seule existe (cas réel :
+                        "Maison Eliora" / abbr "ME", déjà créée via le Setup Wizard
+                        — le stock Ravaka s'hydrate DANS cette Company, on n'en crée
+                        pas une nouvelle),
+                     3) si aucune Company n'existe (site vierge, ex. tests locaux),
+                        on crée "Ravaka" (abbr "RAV", devise MGA, Madagascar) comme
+                        avant.
+                     4) si plusieurs Companies existent sans default_company défini,
+                        le patch échoue proprement (ambiguïté, résolution manuelle
+                        requise) plutôt que de deviner.
+  - Warehouse      : "Stores - <abbr de la Company résolue>" (créé si absent —
+                     ERPNext le crée en général automatiquement à la création
+                     d'une Company).
   - Item           : item_name = item_code (placeholder assumé), item_group "Products",
                      is_stock_item = 1, stock_uom "Nos" (défaut ERPNext, aucune autre
                      convention d'UOM n'existe dans le repo). Aucune marque / catégorie /
@@ -44,11 +56,11 @@ import os
 
 import frappe
 
-COMPANY_NAME = "Ravaka"
-COMPANY_ABBR = "RAV"
-COMPANY_CURRENCY = "MGA"
-COMPANY_COUNTRY = "Madagascar"
-WAREHOUSE_NAME = "Stores - RAV"
+# Utilisées UNIQUEMENT dans le cas de repli (aucune Company n'existe encore).
+FALLBACK_COMPANY_NAME = "Ravaka"
+FALLBACK_COMPANY_ABBR = "RAV"
+FALLBACK_COMPANY_CURRENCY = "MGA"
+FALLBACK_COMPANY_COUNTRY = "Madagascar"
 ITEM_GROUP = "Products"
 STOCK_UOM = "Nos"
 FIXTURE_RELPATH = ("data", "ravaka_initial_stock.json")
@@ -73,16 +85,42 @@ def execute():
         print("Ravaka hydrate — ÉCHEC GLOBAL, voir Error Log. Le patch n'a pas bloqué migrate.")
 
 
+def force_rerun():
+    """Supprime le Patch Log de ce patch pour permettre une VRAIE ré-exécution.
+
+    `bench install-app` (contrairement à un `bench migrate` sur un patch déjà
+    listé au moment de l'install) appelle en interne
+    `frappe.installer.set_all_patches_as_completed()` : TOUTES les entrées de
+    patches.txt de l'app installée sont marquées "déjà exécutées" dans Patch
+    Log SANS jamais être lancées — aucune option CLI ne permet de désactiver
+    ça (confirmé en lisant `bench install-app` et par repro locale : Patch Log
+    contenait notre patch juste après l'install, mais aucune trace d'exécution,
+    aucune donnée créée). Ce patch est une hydratation de données ponctuelle
+    qui doit réellement s'exécuter même juste après l'installation de l'app
+    sur un site déjà existant. À appeler explicitement une seule fois juste
+    après `bench install-app cosmo_erp` sur un tel site, avant le `bench
+    migrate` qui suit (qui, lui, exécutera vraiment le patch une fois son
+    entrée Patch Log supprimée).
+    """
+    frappe.db.delete("Patch Log", {"patch": "cosmo_erp.patches.v0_2.hydrate_ravaka_initial_stock"})
+    frappe.db.commit()
+    print("Ravaka hydrate — Patch Log réinitialisé, le patch s'exécutera réellement au prochain migrate.")
+
+
 def _run():
     entries = _load_fixture()
 
     _ensure_currency()
     _ensure_warehouse_type_transit()
-    _ensure_company()
-    _ensure_warehouse()
+    company = _resolve_company()
+    abbr = frappe.db.get_value("Company", company, "abbr")
+    warehouse = _ensure_warehouse(company, abbr)
     _ensure_uom_nos()
     _ensure_item_group_products()
     _ensure_fiscal_year()
+    expense_account = _resolve_temporary_opening_account(company)
+
+    print(f"Ravaka hydrate — Company cible : {company} (abbr {abbr}), warehouse : {warehouse}")
 
     stats = {"items_created": 0, "items_existing": 0, "sr_created": 0, "sr_skipped": 0}
     failures = []
@@ -115,7 +153,7 @@ def _run():
 
         try:
             if qty and qty > 0:
-                if _create_opening_stock(item_code, qty):
+                if _create_opening_stock(item_code, qty, company, warehouse, expense_account):
                     stats["sr_created"] += 1
                 else:
                     stats["sr_skipped"] += 1
@@ -180,43 +218,57 @@ def _ensure_warehouse_type_transit():
 
 
 def _ensure_currency():
-    if not frappe.db.exists("Currency", COMPANY_CURRENCY):
+    if not frappe.db.exists("Currency", FALLBACK_COMPANY_CURRENCY):
         frappe.get_doc({
             "doctype": "Currency",
-            "currency_name": COMPANY_CURRENCY,
+            "currency_name": FALLBACK_COMPANY_CURRENCY,
             "enabled": 1,
             "symbol": "Ar",
         }).insert(ignore_permissions=True)
 
 
-def _ensure_company():
-    """Crée la Company Ravaka/RAV si absente. Échoue proprement en cas de conflit."""
-    existing_abbr = frappe.db.get_value("Company", COMPANY_NAME, "abbr")
-    if existing_abbr:
-        # La Company existe déjà : vérifier que l'abréviation correspond.
-        if existing_abbr != COMPANY_ABBR:
-            frappe.throw(
-                f"Conflit de Company : « {COMPANY_NAME} » existe déjà avec "
-                f"l'abréviation « {existing_abbr} » (attendu « {COMPANY_ABBR} »). "
-                f"Résolvez le conflit manuellement avant de rejouer le patch."
-            )
-        return
+def _resolve_company():
+    """Détermine la Company cible pour l'hydratation, sans jamais deviner à l'aveugle.
 
-    # Pas de Company nommée Ravaka : vérifier qu'aucune autre n'occupe déjà l'abbr RAV.
-    other = frappe.db.get_value("Company", {"abbr": COMPANY_ABBR}, "name")
+    Ordre de résolution : Global Defaults > Default Company, puis l'unique
+    Company existante, puis création de repli "Ravaka" si le site est vierge.
+    Si plusieurs Companies existent sans default_company défini, échoue
+    proprement plutôt que de choisir au hasard.
+    """
+    default_company = frappe.defaults.get_global_default("company")
+    if default_company and frappe.db.exists("Company", default_company):
+        return default_company
+
+    companies = frappe.get_all("Company", pluck="name")
+    if len(companies) == 1:
+        return companies[0]
+
+    if not companies:
+        return _create_fallback_company()
+
+    frappe.throw(
+        f"Impossible de déterminer la Company cible pour l'hydratation Ravaka : "
+        f"{len(companies)} Companies existent ({', '.join(companies)}) et aucun "
+        f"« Default Company » n'est défini dans Setup > Global Defaults. "
+        f"Configure un Default Company puis relance le patch."
+    )
+
+
+def _create_fallback_company():
+    """Crée la Company de repli Ravaka/RAV (site vierge, aucune Company existante)."""
+    other = frappe.db.get_value("Company", {"abbr": FALLBACK_COMPANY_ABBR}, "name")
     if other:
         frappe.throw(
-            f"Conflit d'abréviation : l'abréviation « {COMPANY_ABBR} » est déjà "
-            f"utilisée par la Company « {other} ». Impossible de créer « {COMPANY_NAME} ». "
-            f"Résolvez le conflit manuellement avant de rejouer le patch."
+            f"Conflit d'abréviation : l'abréviation « {FALLBACK_COMPANY_ABBR} » est "
+            f"déjà utilisée par la Company « {other} ». Impossible de créer "
+            f"« {FALLBACK_COMPANY_NAME} ». Résolvez le conflit manuellement."
         )
-
     frappe.get_doc({
         "doctype": "Company",
-        "company_name": COMPANY_NAME,
-        "abbr": COMPANY_ABBR,
-        "default_currency": COMPANY_CURRENCY,
-        "country": COMPANY_COUNTRY,
+        "company_name": FALLBACK_COMPANY_NAME,
+        "abbr": FALLBACK_COMPANY_ABBR,
+        "default_currency": FALLBACK_COMPANY_CURRENCY,
+        "country": FALLBACK_COMPANY_COUNTRY,
         # Madagascar n'a pas de modèle de plan comptable ERPNext dédié :
         # forcer explicitement le template générique "Standard" évite que
         # Company.after_insert() échoue en cherchant un CoA par pays.
@@ -224,23 +276,47 @@ def _ensure_company():
         "chart_of_accounts": "Standard",
     }).insert(ignore_permissions=True)
     frappe.db.commit()
+    return FALLBACK_COMPANY_NAME
 
 
-def _ensure_warehouse():
-    """Crée le Warehouse Stores - RAV s'il n'existe pas déjà."""
-    if frappe.db.exists("Warehouse", WAREHOUSE_NAME):
-        return
+def _ensure_warehouse(company, abbr):
+    """Retourne le Warehouse "Stores - <abbr>" de la Company, le crée si absent."""
+    warehouse = f"Stores - {abbr}"
+    if frappe.db.exists("Warehouse", warehouse):
+        return warehouse
 
     doc = {
         "doctype": "Warehouse",
         "warehouse_name": "Stores",
-        "company": COMPANY_NAME,
+        "company": company,
     }
-    parent = f"All Warehouses - {COMPANY_ABBR}"
+    parent = f"All Warehouses - {abbr}"
     if frappe.db.exists("Warehouse", parent):
         doc["parent_warehouse"] = parent
     frappe.get_doc(doc).insert(ignore_permissions=True)
     frappe.db.commit()
+    return warehouse
+
+
+def _resolve_temporary_opening_account(company):
+    """Trouve le compte "Temporary Opening" de la Company via account_type.
+
+    Le NOM exact varie selon le Chart of Accounts (ex. "Temporary Opening - RAV"
+    avec le template "Standard", mais "1910 - Temporary Opening - ME" avec
+    "Standard with Numbers" — confirmé en prod). On cherche donc par
+    `account_type="Temporary"` (stable quel que soit le CoA) plutôt que de
+    construire le nom par concaténation.
+    """
+    account = frappe.db.get_value(
+        "Account", {"company": company, "account_type": "Temporary"}, "name"
+    )
+    if not account:
+        frappe.throw(
+            f"Aucun compte account_type=Temporary trouvé pour la Company "
+            f"« {company} » — impossible de créer les Stock Reconciliation "
+            f"d'ouverture sans compte de différence valide."
+        )
+    return account
 
 
 # ── UOM / Item Group ─────────────────────────────────────────────────────────
@@ -331,14 +407,14 @@ def _ensure_item(item_code):
 
 
 # ── Stock d'ouverture ────────────────────────────────────────────────────────
-def _create_opening_stock(item_code, qty):
+def _create_opening_stock(item_code, qty, company, warehouse, expense_account):
     """Crée + soumet une Stock Reconciliation Opening Stock. Idempotent.
 
     Retourne True si créée, False si ignorée (stock déjà présent dans l'entrepôt).
     """
     # Idempotence : si l'item a déjà du stock dans l'entrepôt, on ne rejoue pas.
     existing_qty = frappe.db.get_value(
-        "Bin", {"item_code": item_code, "warehouse": WAREHOUSE_NAME}, "actual_qty"
+        "Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty"
     )
     if existing_qty and float(existing_qty) != 0:
         return False
@@ -346,16 +422,14 @@ def _create_opening_stock(item_code, qty):
     sr = frappe.get_doc({
         "doctype": "Stock Reconciliation",
         "purpose": "Opening Stock",
-        "company": COMPANY_NAME,
+        "company": company,
         # Une Opening Entry exige un compte de différence de type Asset/Liability
-        # (validate_expense_account côté ERPNext) — "Temporary Opening" est le
-        # compte standard du Chart of Accounts "Standard" prévu pour ça (confirmé
-        # par repro locale : sans ce champ, ERPNext prend un compte Expense par
-        # défaut et rejette la réconciliation).
-        "expense_account": f"Temporary Opening - {COMPANY_ABBR}",
+        # (validate_expense_account côté ERPNext) — résolu dynamiquement par
+        # account_type="Temporary" (voir _resolve_temporary_opening_account).
+        "expense_account": expense_account,
         "items": [{
             "item_code": item_code,
-            "warehouse": WAREHOUSE_NAME,
+            "warehouse": warehouse,
             "qty": qty,
             "valuation_rate": 0,
             "allow_zero_valuation_rate": 1,
