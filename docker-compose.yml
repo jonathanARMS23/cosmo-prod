@@ -337,7 +337,10 @@ services:
       - ERPNEXT_URL=http://frontend:8080
       - SESSION_SECRET=${PORTAIL_SESSION_SECRET}
       - NODE_ENV=production
-    ports: ["3000:3000"]
+    # Port hôte 3011 (pas 3000) : ce port est déjà utilisé sur ce serveur
+    # partagé par un autre projet (byarms-web, sans rapport) — confirmé en
+    # SSH, ne jamais réutiliser 3000 ici.
+    ports: ["3011:3000"]
     depends_on: [frontend]
     networks: [cosmo-net]
 
